@@ -1,0 +1,193 @@
+// Flight Log data model. See docs/data-model.md for the ERD and the raw-SQL indexes that
+// Prisma cannot express (the partial dedupe index on flights).
+
+generator client {
+  provider = "prisma-client-js"
+
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum FlightSource {
+  flighty_csv
+  manual
+  api
+}
+
+enum ImportStatus {
+  committed
+  undone
+}
+
+model User {
+  id            String        @id @default(uuid()) @db.Uuid
+  email         String?       @unique
+  displayName   String        @map("display_name")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  flights       Flight[]
+  importBatches ImportBatch[]
+
+  @@map("users")
+}
+
+/// Reference data (global). Primary key is the OurAirports id.
+model Airport {
+  id           Int     @id
+  ident        String
+  iataCode     String? @map("iata_code")
+  icaoCode     String? @map("icao_code")
+  name         String
+  municipality String?
+  isoCountry   String? @map("iso_country")
+  isoRegion    String? @map("iso_region")
+  latitude     Float
+  longitude    Float
+  elevationFt  Int?    @map("elevation_ft")
+  type         String
+  /// IANA zone derived from lat/lon at seed time (tz-lookup).
+  timezone     String?
+  flightyId    String? @map("flighty_id")
+
+  departures Flight[] @relation("origin")
+  arrivals   Flight[] @relation("destination")
+  diversions Flight[] @relation("diverted")
+
+  @@index([iataCode])
+  @@index([icaoCode])
+  @@index([flightyId])
+  @@map("airports")
+}
+
+/// Reference data (global). Primary key is the OpenFlights id.
+model Airline {
+  id        Int      @id
+  name      String
+  iataCode  String?  @map("iata_code")
+  icaoCode  String?  @map("icao_code")
+  callsign  String?
+  country   String?
+  active    Boolean  @default(false)
+  flightyId String?  @map("flighty_id")
+  flights   Flight[]
+
+  @@index([iataCode])
+  @@index([icaoCode])
+  @@index([flightyId])
+  @@map("airlines")
+}
+
+model AircraftType {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  icaoCode  String?  @map("icao_code")
+  flightyId String?  @unique @map("flighty_id")
+  flights   Flight[]
+
+  @@map("aircraft_types")
+}
+
+model Flight {
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  flightyId     String?      @map("flighty_id")
+  importBatchId String?      @map("import_batch_id") @db.Uuid
+  source        FlightSource
+
+  flightDate           DateTime @map("flight_date") @db.Date
+  airlineId            Int?     @map("airline_id")
+  airlineNameRaw       String?  @map("airline_name_raw")
+  flightNumber         String?  @map("flight_number")
+  originAirportId      Int      @map("origin_airport_id")
+  destinationAirportId Int      @map("destination_airport_id")
+  divertedToAirportId  Int?     @map("diverted_to_airport_id")
+  canceled             Boolean  @default(false)
+
+  gateDepartureScheduled DateTime? @map("gate_departure_scheduled") @db.Timestamptz(6)
+  gateDepartureActual    DateTime? @map("gate_departure_actual") @db.Timestamptz(6)
+  takeoffScheduled       DateTime? @map("takeoff_scheduled") @db.Timestamptz(6)
+  takeoffActual          DateTime? @map("takeoff_actual") @db.Timestamptz(6)
+  landingScheduled       DateTime? @map("landing_scheduled") @db.Timestamptz(6)
+  landingActual          DateTime? @map("landing_actual") @db.Timestamptz(6)
+  gateArrivalScheduled   DateTime? @map("gate_arrival_scheduled") @db.Timestamptz(6)
+  gateArrivalActual      DateTime? @map("gate_arrival_actual") @db.Timestamptz(6)
+
+  depTerminal String? @map("dep_terminal")
+  depGate     String? @map("dep_gate")
+  arrTerminal String? @map("arr_terminal")
+  arrGate     String? @map("arr_gate")
+
+  aircraftTypeId Int?    @map("aircraft_type_id")
+  tailNumber     String? @map("tail_number")
+
+  pnr          String?
+  seat         String?
+  seatType     String? @map("seat_type")
+  cabinClass   String? @map("cabin_class")
+  flightReason String? @map("flight_reason")
+  notes        String?
+
+  distanceMiles  Decimal @map("distance_miles") @db.Decimal(8, 1)
+  airTimeMinutes Int?    @map("air_time_minutes")
+
+  // Phase 2 (live lookup) fields
+  cruiseAltitudeFt Int?      @map("cruise_altitude_ft")
+  maxAltitudeFt    Int?      @map("max_altitude_ft")
+  groundSpeedKts   Int?      @map("ground_speed_kts")
+  lookupSource     String?   @map("lookup_source")
+  lookupFetchedAt  DateTime? @map("lookup_fetched_at") @db.Timestamptz(6)
+
+  sourceRaw Json?    @map("source_raw") @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  importBatch  ImportBatch?  @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  airline      Airline?      @relation(fields: [airlineId], references: [id])
+  origin       Airport       @relation("origin", fields: [originAirportId], references: [id])
+  destination  Airport       @relation("destination", fields: [destinationAirportId], references: [id])
+  divertedTo   Airport?      @relation("diverted", fields: [divertedToAirportId], references: [id])
+  aircraftType AircraftType? @relation(fields: [aircraftTypeId], references: [id])
+
+  // Dedupe rule 1. NULL flighty_ids never conflict, so this behaves as a partial index.
+  // Dedupe rule 2 is a raw-SQL partial expression index (see the init migration).
+  @@unique([userId, flightyId], map: "flights_user_flighty_id_key")
+  @@index([userId, flightDate])
+  @@index([importBatchId])
+  @@map("flights")
+}
+
+model ImportBatch {
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  filename   String
+  fileSha256 String       @map("file_sha256")
+  status     ImportStatus @default(committed)
+  total      Int
+  imported   Int
+  duplicates Int
+  failed     Int
+  errors     Json         @default("[]") @db.JsonB
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flights Flight[]
+
+  @@index([userId, createdAt])
+  @@map("import_batches")
+}
+
+/// Phase 2: cached responses from external flight-data providers.
+model FlightLookupCache {
+  id           Int      @id @default(autoincrement())
+  provider     String
+  flightNumber String   @map("flight_number")
+  flightDate   DateTime @map("flight_date") @db.Date
+  response     Json     @db.JsonB
+  fetchedAt    DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  @@unique([provider, flightNumber, flightDate])
+  @@map("flight_lookup_cache")
+}
