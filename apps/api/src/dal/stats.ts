@@ -95,6 +95,8 @@ export async function computeStats(userId: string, filters: FlightFilters): Prom
         (SELECT COALESCE(sum(distance_miles), 0) FROM flown) AS total_miles,
         (SELECT COALESCE(sum(air_time_minutes), 0) FROM flown) AS total_air_minutes,
         (SELECT count(air_time_minutes) FROM flown) AS flights_with_air_time,
+        (SELECT COALESCE(sum(gate_time_minutes), 0) FROM flown) AS total_gate_minutes,
+        (SELECT count(gate_time_minutes) FROM flown) AS flights_with_gate_time,
         (SELECT count(DISTINCT COALESCE(airline_id::text, 'raw:' || lower(airline_name_raw)))
            FROM flown WHERE airline_id IS NOT NULL OR airline_name_raw IS NOT NULL) AS unique_airlines`,
     prisma.$queryRaw<Record<string, unknown>[]>`${base},
@@ -210,6 +212,8 @@ export async function computeStats(userId: string, filters: FlightFilters): Prom
       totalMiles,
       totalAirMinutes: num(h.total_air_minutes),
       flightsWithAirTime: num(h.flights_with_air_time),
+      totalGateMinutes: num(h.total_gate_minutes),
+      flightsWithGateTime: num(h.flights_with_gate_time),
       uniqueAirports: airportRows.length,
       uniqueAirlines: num(h.unique_airlines),
       uniqueCountries: new Set(airportRows.map((a) => a.country).filter(Boolean)).size,

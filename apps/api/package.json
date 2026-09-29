@@ -27,6 +27,7 @@
     "luxon": "^3.5.0",
     "multer": "^2.0.0",
     "prisma": "^6.19.0",
+    "swagger-ui-express": "^5.0.1",
     "tsx": "^4.19.2",
     "tz-lookup": "^6.1.25",
     "zod": "^3.24.1"
@@ -37,6 +38,7 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.2",
     "@types/supertest": "^6.0.2",
+    "@types/swagger-ui-express": "^4.1.8",
     "supertest": "^7.0.0",
     "vitest": "^2.1.8"
   }

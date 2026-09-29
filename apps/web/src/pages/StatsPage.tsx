@@ -148,6 +148,15 @@ function Dashboard({ stats, unit }: { stats: Stats; unit: DistanceUnit }) {
           }
         />
         <StatCard
+          label="Time between gates"
+          value={formatMinutes(h.totalGateMinutes)}
+          sub={
+            h.flightsWithGateTime < h.totalFlights
+              ? `${formatInt(h.flightsWithGateTime)} of ${formatInt(h.totalFlights)} flights have times`
+              : `${formatOne(h.totalGateMinutes / 60 / 24)} days`
+          }
+        />
+        <StatCard
           label="Around the Earth"
           value={`${formatTwo(h.timesAroundEarth)}×`}
           sub="at 24,901 mi per lap"
@@ -165,7 +174,7 @@ function Dashboard({ stats, unit }: { stats: Stats; unit: DistanceUnit }) {
           value={p.arrivalOnTimePercent === null ? '—' : `${formatOne(p.arrivalOnTimePercent)}%`}
           sub={`within ${p.thresholdMinutes} min · ${p.arrivalSamples} flights`}
         />
-        <StatCard label="Canceled" value={formatInt(h.canceledFlights)} />
+        {/* Canceled tile hidden until the UI redesign; canceled count still shows under Flights. */}
       </section>
 
       <section

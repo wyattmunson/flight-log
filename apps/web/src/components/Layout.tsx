@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useConfig } from '../api/hooks';
 
 const NAV = [
   { to: '/', label: 'Map', end: true },
@@ -11,6 +12,7 @@ const NAV = [
 export function Layout() {
   const { pathname } = useLocation();
   const fullBleed = pathname === '/';
+  const apiDocsUrl = useConfig().data?.apiDocsUrl;
   return (
     <div className="flex min-h-dvh flex-col">
       <a
@@ -96,6 +98,14 @@ export function Layout() {
             OpenStreetMap contributors
           </a>
           .
+          {apiDocsUrl && (
+            <>
+              {' '}
+              <a className="underline" href={apiDocsUrl} target="_blank" rel="noreferrer">
+                API docs
+              </a>
+            </>
+          )}
         </div>
       </footer>
     </div>

@@ -24,6 +24,10 @@ export const env = {
   get defaultUserId() {
     return process.env.DEFAULT_USER_ID || DEFAULT_USER_ID;
   },
+  /** Swagger UI + openapi.json. On unless ENABLE_API_DOCS is explicitly "false" (or "0"). */
+  get enableApiDocs() {
+    return !['false', '0'].includes(process.env.ENABLE_API_DOCS?.trim().toLowerCase() ?? '');
+  },
   get mapStyleUrl() {
     return process.env.MAP_STYLE_URL || 'https://tiles.openfreemap.org/styles/liberty';
   },

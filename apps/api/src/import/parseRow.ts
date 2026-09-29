@@ -17,6 +17,7 @@ import {
 import type { ReferenceIndex } from '../dal/reference';
 import {
   airTimeFrom,
+  gateTimeFrom,
   convertTimes,
   flightDistanceMiles,
   type FlightTimeValues,
@@ -49,6 +50,7 @@ export interface PreparedFlight {
   notes: string | null;
   distanceMiles: number;
   airTimeMinutes: number | null;
+  gateTimeMinutes: number | null;
   sourceRaw: Record<string, string | null>;
   /** Flighty IDs for reference rows, remembered after commit. */
   refFlightyIds: { airports: [number, string][]; airline: [number, string] | null };
@@ -222,6 +224,7 @@ export function parseRow(
     notes: record.notes?.trim() || null,
     distanceMiles,
     airTimeMinutes: airTimeFrom(times),
+    gateTimeMinutes: gateTimeFrom(times),
     sourceRaw,
     refFlightyIds: {
       airports: refAirports,

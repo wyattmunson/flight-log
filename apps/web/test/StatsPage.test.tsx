@@ -11,6 +11,8 @@ const emptyStats = {
     totalMiles: 0,
     totalAirMinutes: 0,
     flightsWithAirTime: 0,
+    totalGateMinutes: 0,
+    flightsWithGateTime: 0,
     uniqueAirports: 0,
     uniqueAirlines: 0,
     uniqueCountries: 0,

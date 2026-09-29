@@ -45,6 +45,7 @@ export function toListItem(f: FlightWithRelations): FlightListItem {
     cabinClass: f.cabinClass,
     distanceMiles: Number(f.distanceMiles),
     airTimeMinutes: f.airTimeMinutes,
+    gateTimeMinutes: f.gateTimeMinutes,
     gateDepartureScheduled: iso(f.gateDepartureScheduled),
     gateDepartureActual: iso(f.gateDepartureActual),
     takeoffScheduled: iso(f.takeoffScheduled),

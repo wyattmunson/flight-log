@@ -131,6 +131,7 @@ model Flight {
 
   distanceMiles  Decimal @map("distance_miles") @db.Decimal(8, 1)
   airTimeMinutes Int?    @map("air_time_minutes")
+  gateTimeMinutes Int?   @map("gate_time_minutes")
 
   // Phase 2 (live lookup) fields
   cruiseAltitudeFt Int?      @map("cruise_altitude_ft")

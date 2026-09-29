@@ -49,6 +49,7 @@ function toCreateInput(
     notes: f.notes,
     distanceMiles: f.distanceMiles,
     airTimeMinutes: f.airTimeMinutes,
+    gateTimeMinutes: f.gateTimeMinutes,
     sourceRaw: f.sourceRaw,
   };
 }

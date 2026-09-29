@@ -86,9 +86,9 @@ export function FlightsPage() {
           Add flight
         </Link>
       </div>
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="w-full sm:w-64">
-          <span className="label text-xs">Search</span>
+          <span className="label mb-0.5 text-xs">Search</span>
           <input
             type="search"
             className="input py-1.5"
@@ -100,7 +100,7 @@ export function FlightsPage() {
             }}
           />
         </label>
-        <FilterBar />
+        <FilterBar compact />
       </div>
 
       {list.isLoading && <Spinner />}

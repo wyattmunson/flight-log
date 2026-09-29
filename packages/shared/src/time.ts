@@ -130,6 +130,19 @@ export function computeAirTimeMinutes(t: {
   );
 }
 
+/** Gate-to-gate time: actual gate departure→arrival if both exist, else the scheduled pair, else null. */
+export function computeGateTimeMinutes(t: {
+  gateDepartureActual?: Instant;
+  gateArrivalActual?: Instant;
+  gateDepartureScheduled?: Instant;
+  gateArrivalScheduled?: Instant;
+}): number | null {
+  return (
+    minutesBetween(t.gateDepartureActual, t.gateArrivalActual) ??
+    minutesBetween(t.gateDepartureScheduled, t.gateArrivalScheduled)
+  );
+}
+
 /** Delay in whole minutes (positive = late). */
 export function delayMinutes(scheduled: Instant, actual: Instant): number | null {
   const a = toMillis(scheduled);

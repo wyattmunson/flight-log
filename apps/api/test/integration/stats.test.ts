@@ -22,6 +22,8 @@ describe('GET /api/stats (fixture)', () => {
       totalMiles: 43976.6,
       totalAirMinutes: 5267,
       flightsWithAirTime: 11,
+      totalGateMinutes: 5762,
+      flightsWithGateTime: 12,
       uniqueAirports: 12,
       uniqueAirlines: 9,
       uniqueCountries: 4,

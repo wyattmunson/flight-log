@@ -13,7 +13,7 @@ import {
 import * as flightsDal from '../dal/flights';
 import { getAirline, getAirportsByIds, upsertAircraftType } from '../dal/reference';
 import { AppError, notFound } from '../http/errors';
-import { airTimeFrom, convertTimes, flightDistanceMiles } from './derive';
+import { airTimeFrom, convertTimes, flightDistanceMiles, gateTimeFrom } from './derive';
 
 type FlightData = Omit<Prisma.FlightUncheckedCreateInput, 'userId' | 'source'>;
 
@@ -75,6 +75,7 @@ async function prepare(input: FlightInputParsed): Promise<FlightData> {
     notes: input.notes ?? null,
     distanceMiles: flightDistanceMiles(origin, destination, divertedTo),
     airTimeMinutes: airTimeFrom(times),
+    gateTimeMinutes: gateTimeFrom(times),
   };
 }
 

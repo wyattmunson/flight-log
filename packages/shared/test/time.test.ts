@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeAirTimeMinutes,
+  computeGateTimeMinutes,
   delayMinutes,
   formatMinutes,
   parseFlightDate,
@@ -135,5 +136,37 @@ describe('display helpers', () => {
     expect(formatMinutes(425)).toBe('7h 05m');
     expect(formatMinutes(45)).toBe('45m');
     expect(formatMinutes(null)).toBe('—');
+  });
+});
+
+describe('computeGateTimeMinutes', () => {
+  it('prefers the actual gate pair, then the scheduled pair, else null', () => {
+    const t = {
+      gateDepartureScheduled: '2024-01-01T10:00:00Z',
+      gateArrivalScheduled: '2024-01-01T12:00:00Z',
+      gateDepartureActual: '2024-01-01T10:15:00Z',
+      gateArrivalActual: '2024-01-01T12:05:00Z',
+    };
+    expect(computeGateTimeMinutes(t)).toBe(110);
+    expect(computeGateTimeMinutes({ ...t, gateArrivalActual: null })).toBe(120);
+    expect(computeGateTimeMinutes({})).toBeNull();
+  });
+
+  it('is independent of takeoff/landing times', () => {
+    expect(
+      computeGateTimeMinutes({
+        takeoffActual: '2024-01-01T10:00:00Z',
+        landingActual: '2024-01-01T12:00:00Z',
+      }),
+    ).toBeNull();
+  });
+
+  it('ignores negative durations', () => {
+    expect(
+      computeGateTimeMinutes({
+        gateDepartureActual: '2024-01-01T12:00:00Z',
+        gateArrivalActual: '2024-01-01T10:00:00Z',
+      }),
+    ).toBeNull();
   });
 });

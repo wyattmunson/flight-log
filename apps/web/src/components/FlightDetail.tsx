@@ -113,6 +113,7 @@ export function FlightDetailView({
           value={`${formatDistance(flight.distanceMiles)} · ${formatDistance(flight.distanceMiles, 'km')}`}
         />
         <Field label="Air time" value={formatMinutes(flight.airTimeMinutes)} />
+        <Field label="Time between gates" value={formatMinutes(flight.gateTimeMinutes)} />
       </dl>
 
       <h3 className="mt-6 text-sm font-semibold">Times (local to each airport)</h3>

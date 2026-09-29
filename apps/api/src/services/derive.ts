@@ -6,6 +6,7 @@ import {
   FLIGHT_TIME_FIELDS,
   TIME_FIELD_AIRPORT,
   computeAirTimeMinutes,
+  computeGateTimeMinutes,
   haversineMiles,
   parseFlightTime,
   roundMiles,
@@ -65,4 +66,8 @@ export function flightDistanceMiles(
 
 export function airTimeFrom(values: FlightTimeValues): number | null {
   return computeAirTimeMinutes(values);
+}
+
+export function gateTimeFrom(values: FlightTimeValues): number | null {
+  return computeGateTimeMinutes(values);
 }

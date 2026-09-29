@@ -35,11 +35,12 @@ without your own data, import
 [`apps/api/test/fixtures/flighty-sample.csv`](apps/api/test/fixtures/flighty-sample.csv) (synthetic
 flights) on the **Import** page.
 
-| Service | URL                              | Notes                                                                  |
-| ------- | -------------------------------- | ---------------------------------------------------------------------- |
-| web     | http://localhost:5173            | Vite dev server; proxies `/api` to the API                             |
-| api     | http://localhost:3001/api/health | Express; `API_PORT` sets the host port                                 |
-| db      | `localhost:5434`                 | Postgres 16; `DB_PORT` sets the host port. Also hosts `flightlog_test` |
+| Service | URL                              | Notes                                                                                                               |
+| ------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| web     | http://localhost:5173            | Vite dev server; proxies `/api` to the API                                                                          |
+| api     | http://localhost:3001/api/health | Express; `API_PORT` sets the host port                                                                              |
+| docs    | http://localhost:3001/api/docs   | Swagger UI (spec at `/api/openapi.json`); also linked in the web footer. Set `ENABLE_API_DOCS=false` to turn it off |
+| db      | `localhost:5434`                 | Postgres 16; `DB_PORT` sets the host port. Also hosts `flightlog_test`                                              |
 
 Both apps hot-reload from the bind-mounted source. After changing dependencies, refresh the
 container's `node_modules` volume: `docker compose down && docker volume rm flight-log_node_modules && docker compose up --build`.
@@ -153,7 +154,8 @@ sequenceDiagram
 | Method           | Path                                                 |                                                                                                                                             |
 | ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET              | `/api/health`                                        | DB ping                                                                                                                                     |
-| GET              | `/api/config`                                        | Map style URL, lookup status                                                                                                                |
+| GET              | `/api/config`                                        | Map style URL, lookup status, API docs URL                                                                                                  |
+| GET              | `/api/docs`, `/api/openapi.json`                     | Swagger UI and the raw OpenAPI spec (`ENABLE_API_DOCS`, on by default)                                                                      |
 | GET              | `/api/flights`                                       | `page, pageSize, sort (date, -date, distance, route, airline, flightNumber, aircraft, duration), year, yearFrom, yearTo, airline, cabin, q` |
 | GET/PATCH/DELETE | `/api/flights/:id`                                   | Detail includes PNR and the raw CSV row                                                                                                     |
 | POST             | `/api/flights`                                       | Times without an offset are local to the relevant airport                                                                                   |
@@ -277,6 +279,8 @@ The analysis recommends **AeroDataBox** (free RapidAPI tier) as primary and **Fl
   diversion airport.
 - **Air time** is takeoff → landing (actual, else scheduled). Flights with only gate times have no air
   time. The dashboard says how many flights have times.
+- **Time between gates** is gate departure → gate arrival (actual pair, else scheduled pair; never mixed),
+  stored as `gate_time_minutes` and independent of air time. Same rejection rules (≤ 0 or > 30 h → none).
 - **Diverted flights** count as arriving at the diversion airport on the map, for airport visits,
   and for routes.
 - **Canceled flights** are excluded from the map, distance, time, frequency, records and punctuality.
@@ -329,6 +333,7 @@ row written differently) and 2 invalid (unknown airport `ZZX`, unparseable date)
 | Flights / canceled              | 12 / 1                                                                       |
 | Distance                        | 43,976.6 mi (1.766× around the Earth, 18.41% to the Moon)                    |
 | Time in the air                 | 5,267 min across 11 flights (BOS–JFK has gate times only)                    |
+| Time between gates              | 5,762 min across 12 flights (actual gate pair, else scheduled)               |
 | Airports / airlines / countries | 12 / 9 / 4                                                                   |
 | Top airports                    | JFK 4, LAX 4, SFO 3, NRT 3                                                   |
 | Longest / shortest              | LAX–SYD 7,494.4 mi / BOS–JFK 186.3 mi                                        |

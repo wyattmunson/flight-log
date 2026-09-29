@@ -2,6 +2,7 @@ import express from 'express';
 import type { AppConfig } from '@flight-log/shared';
 import { prisma } from './db';
 import { env } from './env';
+import { docsRouter } from './docs/router';
 import { errorHandler, notFoundHandler } from './http/errors';
 import { requestLog } from './http/requestLog';
 import { resolveUser } from './http/resolveUser';
@@ -30,10 +31,12 @@ export function createApp(options: { lookupProvider?: FlightLookupProvider } = {
   );
 
   app.use('/api', resolveUser);
+  if (env.enableApiDocs) app.use('/api', docsRouter());
 
   app.get('/api/config', (_req, res) => {
     const config: AppConfig = {
       mapStyleUrl: env.mapStyleUrl,
+      apiDocsUrl: env.enableApiDocs ? '/api/docs' : null,
       lookup: {
         configured: lookupProvider.isConfigured(),
         provider: lookupProvider.isConfigured() ? lookupProvider.name : null,

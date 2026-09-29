@@ -32,6 +32,7 @@ const flight: FlightDetail = {
   cabinClass: 'Business',
   distanceMiles: 7494.4,
   airTimeMinutes: 900,
+  gateTimeMinutes: null,
   gateDepartureScheduled: null,
   gateDepartureActual: null,
   takeoffScheduled: '2024-07-02T05:30:00.000Z',

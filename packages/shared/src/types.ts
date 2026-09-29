@@ -53,6 +53,7 @@ export interface FlightListItem extends FlightTimes {
   cabinClass: string | null;
   distanceMiles: number;
   airTimeMinutes: number | null;
+  gateTimeMinutes: number | null;
 }
 
 /** Full record for the detail view, including personal fields. */
@@ -215,6 +216,8 @@ export interface Stats {
     totalMiles: number;
     totalAirMinutes: number;
     flightsWithAirTime: number;
+    totalGateMinutes: number;
+    flightsWithGateTime: number;
     uniqueAirports: number;
     uniqueAirlines: number;
     uniqueCountries: number;
@@ -277,5 +280,7 @@ export interface LookupResponse {
 
 export interface AppConfig {
   mapStyleUrl: string;
+  /** Path of the Swagger UI, or null when API docs are disabled. */
+  apiDocsUrl: string | null;
   lookup: { configured: boolean; provider: string | null };
 }

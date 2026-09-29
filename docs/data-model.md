@@ -88,6 +88,7 @@ erDiagram
     text notes
     numeric distance_miles "derived"
     int air_time_minutes "derived"
+    int gate_time_minutes "derived"
     int cruise_altitude_ft "phase 2"
     int max_altitude_ft "phase 2"
     int ground_speed_kts "phase 2"
@@ -153,6 +154,8 @@ and commit are skipped rather than failing the batch. A manual create that hits 
   (`packages/shared/src/distance.ts`). Recomputed on every create/update.
 - `air_time_minutes`: `takeoff_actual → landing_actual`, else `takeoff_scheduled → landing_scheduled`,
   else NULL. Negative or > 30 h results are treated as NULL.
+- `gate_time_minutes`: `gate_departure_actual → gate_arrival_actual`, else the scheduled gate pair,
+  else NULL (same bounds; `computeGateTimeMinutes`). The migration backfilled existing rows.
 - Times are stored as UTC `timestamptz`. Naive local inputs (CSV cells or form fields without an
   offset) are interpreted in the relevant airport's IANA zone:
 
