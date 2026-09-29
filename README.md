@@ -6,6 +6,18 @@ time), then explore it on a great-circle **map** and a **stats dashboard**.
 Phase 1 is the full core app. Phase 2 (live flight-data lookups) is researched in
 [`docs/flight-data-api-analysis.md`](docs/flight-data-api-analysis.md), and the provider seam already exists.
 
+**Where things are documented**
+
+| Document                                                               | For           | Contents                                                                                               |
+| ---------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------ |
+| This README                                                            | People        | Setup, architecture, components, design decisions, assumptions, how to extend, roadmap                 |
+| [`docs/data-model.md`](docs/data-model.md)                             | Both          | ERD, dedupe rules, derived values, normalization                                                       |
+| [`docs/flight-data-api-analysis.md`](docs/flight-data-api-analysis.md) | Both          | Phase 2 provider research and recommendation                                                           |
+| [`AGENTS.md`](AGENTS.md) (+ one per workspace)                         | Coding agents | Terse rules, invariants, gotchas and change checklists. `CLAUDE.md` files import them for Claude Code. |
+
+The rationale lives here. The agent files state the resulting rules and link back, so update both
+when a convention changes.
+
 ## Quick start
 
 Requires Docker (Compose v2).
@@ -70,14 +82,42 @@ docs/             data-model.md (ERD), flight-data-api-analysis.md
 docker/           dev image, api entrypoint (migrate → seed-if-empty → dev), test-DB init
 ```
 
-- **One schema, both sides.** `packages/shared` is consumed as TypeScript source by the API (tsx),
-  the web app (Vite) and the tests, so validation and types can't drift.
-- **User scoping.** `resolveUser` sets `req.userId`; every DAL function takes `userId` first.
-  Adding auth means replacing that one middleware.
-- **Stats and map are SQL aggregates** (`src/dal/stats.ts`, `src/dal/map.ts`). The API
-  precomputes great-circle paths with longitudes unwrapped across ±180°, so trans-Pacific arcs draw
-  continuously in MapLibre.
-- **Errors** always look like `{ "error": { "code", "message", "details?" } }`.
+API request path: `requestLog → express.json → resolveUser → router (Zod-validated) → service / import →
+dal → Prisma`, with `errorHandler` turning every failure into `{ "error": { "code", "message", "details?" } }`.
+Why it's shaped this way is in [Design decisions](#design-decisions).
+
+### Components
+
+**API (`apps/api/src`)**
+
+| Module                         | Responsibility                                                                                                                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app.ts`, `index.ts`, `env.ts` | App factory (tests call `createApp()`), server start, typed env with root `.env` loading                                                                            |
+| `http/`                        | `AppError` + error handler, `route()` async wrapper, `resolveUser`, access log (no bodies)                                                                          |
+| `routes/`                      | Thin routers: `flights`, `import`, `insights` (map, stats, filter options), `reference` (search), `lookup`                                                          |
+| `services/derive.ts`           | Local time → UTC by airport zone, great-circle distance, air time. Shared by import and the form.                                                                   |
+| `services/flights.ts`          | Manual create and PATCH (merge, then recompute every derived value)                                                                                                 |
+| `import/`                      | `columns.ts` header mapping → `parseRow.ts` pure row parser + `naturalKey` → `service.ts` preview/commit → `previewStore.ts`                                        |
+| `dal/`                         | All SQL. User-scoped `flights`, `imports`, `stats`, `map`. Global `reference` (search, code resolution, aircraft types). `filters.ts` Prisma + SQL filter builders. |
+| `lookup/`                      | `FlightLookupProvider` interface, `NullProvider` / `StubProvider`, registry, cached lookup service                                                                  |
+| `seed/`                        | OurAirports + OpenFlights parsing and insertion, default user                                                                                                       |
+
+**Web (`apps/web/src`)**
+
+| Piece                                                     | Responsibility                                                                                           |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `pages/MapPage` + `components/FlightMap`                  | MapLibre map: frequency-weighted arcs, sized airport markers, popups, route list and route flights panel |
+| `pages/FlightsPage` + `components/FlightDetail`, `Drawer` | Sortable, filterable, paginated table; detail drawer (`?flight=<id>`) with local times; delete           |
+| `pages/FlightFormPage` + `components/Combobox`            | Add/edit form with airport/airline typeahead, live distance, local-time inputs, **Look up flight**       |
+| `pages/ImportPage`                                        | Drag-and-drop upload, preview (counts, sample, errors), commit summary, import history + undo            |
+| `pages/StatsPage` + `components/charts`, `SortableTable`  | Headline cards, records, punctuality, Recharts charts with table views, mi/km toggle                     |
+| `components/FilterBar`, `lib/useFilters`                  | Year range, airline and cabin filters stored in the URL, shared by map, list and stats                   |
+| `components/Layout`, `States`                             | Nav, attribution footer; spinner, error (with retry) and empty states                                    |
+| `api/client`, `api/hooks`                                 | `fetch` wrapper with typed errors; every TanStack Query hook plus cache invalidation                     |
+| `lib/format`, `lib/useChartTheme`                         | Display formatting (dates, distances, local times, country names); chart colors from CSS tokens          |
+
+**Shared (`packages/shared/src`)**: `schemas.ts` (Zod inputs), `types.ts` (API responses), `distance.ts`,
+`geo.ts` (great circle with unwrapped longitudes), `normalize.ts`, `time.ts` (Luxon parsing/formatting), `constants.ts`.
 
 ### Import data flow
 
@@ -127,7 +167,72 @@ sequenceDiagram
 
 `airline` filter values are an airline id, or `raw:<name>` for airlines not found in the reference data.
 
-## Adding a flight-lookup provider
+## Design decisions
+
+| Decision                                                                                         | Why                                                                                                                                         | Trade-off                                                                 |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **npm-workspaces monorepo with `packages/shared` consumed as TS source**                         | One set of Zod schemas and response types for API, web and tests, with no build step or publish cycle                                       | Every consumer must compile TS (tsx, Vite and Vitest all do)              |
+| **API runs on `tsx` in dev and in Docker**                                                       | No separate build output to keep in sync during Phase 1                                                                                     | Not a production artifact; see Roadmap                                    |
+| **Prisma for schema and CRUD; tagged raw SQL for aggregates**                                    | Prisma gives migrations and typed CRUD. Stats and map need `GROUP BY`, CTEs and `FILTER` clauses that are clearer in SQL.                   | Filters exist twice (`filtersWhere` / `filtersSql`) and must stay in sync |
+| **Dedupe in the database** (unique + partial expression index) **and in the app** (`naturalKey`) | The DB guarantees idempotency even under races (`ON CONFLICT DO NOTHING`); the app mirror lets the preview report duplicates before writing | Prisma can't model the partial index, so new migrations must be reviewed  |
+| **Preview stored in memory with a TTL**                                                          | Commit doesn't need a re-upload, and it's simple for a single-user, single-process app                                                      | Lost on restart; not multi-instance (Roadmap)                             |
+| **Pure `parseRow` with a preloaded reference index**                                             | A few queries per file instead of per row; the parser is unit-testable without a DB                                                         | Very large files hold the index and rows in memory (capped at 20k rows)   |
+| **Store UTC; interpret naive times in the airport's IANA zone** (`tz-lookup` at seed time)       | Correct across DST and the date line; one rule shared by CSV import and the form                                                            | Requires every airport to have a zone (falls back to UTC)                 |
+| **Derived values computed server-side and stored**                                               | Distance and air time can't drift from their inputs, and aggregates stay cheap                                                              | Changing the formula needs a backfill                                     |
+| **"Effective arrival" = diversion airport**                                                      | Matches where the traveler actually went (distance, map, visits)                                                                            | Scheduled-arrival stats use the planned destination                       |
+| **Own great-circle function (not `@turf/great-circle`) that unwraps longitudes**                 | Turf splits antimeridian arcs into MultiLineStrings; unwrapped lines render as one continuous arc in MapLibre and are easy to test          | A little more code to own                                                 |
+| **Great-circle paths computed by the API**                                                       | The browser gets ready-to-draw GeoJSON, and route collapsing happens in SQL                                                                 | Slightly larger `/api/map` payload                                        |
+| **`maplibre-gl` used directly (no `react-map-gl`)**                                              | Fewer version couplings; the map is one imperative component                                                                                | Manual lifecycle handling (resize, remount guards)                        |
+| **Map style URL served by `/api/config`**                                                        | One env var (`MAP_STYLE_URL`) for all environments, and no Vite rebuild to change it                                                        | One extra request at startup                                              |
+| **Filters in the URL**                                                                           | Shareable, reload-safe views. Map, list and stats read the same parameters through `useFilters`                                             | Filters don't carry over when you switch pages from the nav (Roadmap)     |
+| **Single-hue charts, horizontal bars, no pies, table views, separate light/dark tokens**         | Color-blind safe and readable on mobile, with an accessible fallback for every chart                                                        | Less decorative                                                           |
+| **`resolveUser` middleware + user-scoped DAL**                                                   | Adding real auth later is a one-file change                                                                                                 | Every DAL function carries a `userId` parameter                           |
+| **Pinned, proven major versions**                                                                | Predictable builds while the feature set settles                                                                                            | Upgrades are planned work (Roadmap)                                       |
+
+## Extending the app
+
+**Conventions to keep** (enforced by review and tests; agents get the same list in `AGENTS.md`):
+user-owned data only through `src/dal/*` scoped by `userId`; PNR and seat only in detail/edit; times
+stored UTC with the airport-zone rule; derived values computed server-side; API shapes defined in
+`packages/shared`; every data view has loading, error and empty states. Before you finish, run
+`npm run lint && npm run typecheck && npm test`.
+
+### Add an API endpoint
+
+1. Put request schemas in `packages/shared/src/schemas.ts` and response types in `types.ts`.
+2. Add a handler to the right router in `apps/api/src/routes/`. Parse input with Zod and wrap it in
+   `route()`. Put database access in a `src/dal/` function that takes `userId` first.
+3. Mount new routers in `src/app.ts`, add a hook in `apps/web/src/api/hooks.ts`, and write a
+   supertest integration test in `apps/api/test/integration/`.
+
+### Change the database schema
+
+1. Edit `apps/api/prisma/schema.prisma`.
+2. Create the migration **without applying it**:
+   `npm run prisma -w @flight-log/api -- migrate dev --create-only --name <change>`.
+3. **Review the SQL.** Prisma will try to `DROP INDEX` the hand-written indexes
+   (`flights_dedupe_natural_key`, `airports_name_lower_idx`, …). Delete those lines.
+4. Apply with `npm run db:migrate`, then update the DAL mappers, shared types and `docs/data-model.md`.
+
+### Add a statistic or chart
+
+Add a query to `apps/api/src/dal/stats.ts`, reusing `baseCte` and the `flown` CTE so canceled flights
+stay excluded. Extend the `Stats` type, render it in `StatsPage.tsx` inside a `ChartCard` (which
+gives you the empty state and table toggle), and add an assertion to `stats.test.ts`. If the fixture
+changes, recompute the expected values independently.
+
+### Add a filter
+
+Extend `FlightFiltersSchema`, then implement it in **both** `filtersWhere` and `filtersSql`
+(`apps/api/src/dal/filters.ts`), add the key to `useFilters`, and add a control to `FilterBar`.
+
+### Add a page
+
+Create `apps/web/src/pages/<Name>Page.tsx`, add a route in `App.tsx` (use `React.lazy` if it pulls
+in a heavy library), and add a nav entry in `components/Layout.tsx`. Handle loading, error and empty
+states, and check it at phone width in light and dark mode.
+
+### Add a flight-lookup provider
 
 1. Create `apps/api/src/lookup/providers/<name>Provider.ts` implementing `FlightLookupProvider`
    (`name`, `isConfigured()`, `lookup({ flightNumber, date })`). Map the provider's payload into
@@ -228,6 +333,34 @@ row written differently) and 2 invalid (unknown airport `ZZX`, unparseable date)
 | Most-flown route / busiest day  | SFO ↔ NRT (3) / 2023-06-01 (2 flights)                                       |
 | Repeat tail                     | N24976 (3 flights)                                                           |
 | Punctuality                     | avg departure +14.2 min, avg arrival +5.7 min, on time 72.7% dep / 90.9% arr |
+
+## Roadmap
+
+**Phase 2: live flight lookups** (seam in place, see [the analysis](docs/flight-data-api-analysis.md))
+
+- [ ] `AeroDataBoxProvider` (primary) and `FlightAwareProvider` (fallback), plus a provider chain
+      that tries the next one on no-match or quota errors.
+- [ ] Show provider attribution next to looked-up values (required by AeroDataBox's free plan).
+- [ ] Optional enrichment: tail number → aircraft type via adsbdb, cached per registration.
+- [ ] Fill the Phase 2 columns (`cruise_altitude_ft`, `max_altitude_ft`, `ground_speed_kts`,
+      `lookup_source`, `lookup_fetched_at`) when a lookup result is saved.
+
+**Platform**
+
+- [ ] Authentication: replace `resolveUser` with session/JWT verification (the DAL is already scoped).
+- [ ] Production build: compile the API (or bundle with esbuild), serve `apps/web/dist` statically,
+      and add a production Dockerfile and compose profile.
+- [ ] Move import previews to a DB table (e.g. `import_previews` with `expires_at`) for multiple
+      API instances and restarts.
+- [ ] Reference data refresh: make seeding upsert (today it only inserts new rows).
+- [ ] Planned dependency upgrades: React 19, Prisma 7, Zod 4, Tailwind 4, Recharts 3, Express 5,
+      Vite 6+. Clears the `deepmerge-ts` advisory once Prisma ships a fix.
+- [ ] Split the map bundle further (MapLibre is about 1 MB minified).
+- [ ] Carry active filters across pages when navigating (nav links currently drop the query string).
+
+**Product ideas** (Phase 1 out-of-scope list): sharing / public profiles, CSV/GeoJSON export, native
+apps, email/PDF ticket parsing, numeric sorting of flight numbers, re-normalizing existing rows when
+normalization rules change.
 
 ## Troubleshooting
 
