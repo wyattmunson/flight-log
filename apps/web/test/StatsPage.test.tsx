@@ -60,10 +60,7 @@ function renderAt(url: string, body: unknown, status = 200) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter
-        initialEntries={[url]}
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
+      <MemoryRouter initialEntries={[url]}>
         <StatsPage />
       </MemoryRouter>
     </QueryClientProvider>,

@@ -64,7 +64,7 @@ const flight: FlightDetail = {
 describe('FlightDetailView', () => {
   it('shows times in each airport’s local zone, across the date line', () => {
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <FlightDetailView flight={flight} onDelete={vi.fn()} deleting={false} />
       </MemoryRouter>,
     );
@@ -79,7 +79,7 @@ describe('FlightDetailView', () => {
 
   it('shows the PNR (detail view only) and computed values', () => {
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <FlightDetailView flight={flight} onDelete={vi.fn()} deleting={false} />
       </MemoryRouter>,
     );

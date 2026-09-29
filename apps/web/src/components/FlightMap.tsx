@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import maplibregl, { type GeoJSONSource, type LngLatBoundsLike } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { GeoJSONSource, LngLatBoundsLike } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+// MapLibre 6 runs tile parsing in a module worker; let Vite bundle it and hand MapLibre its URL
+// (the library's own relative lookup breaks under dependency pre-bundling).
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import type { MapAirport, MapData } from '@flight-log/shared';
 import { countryName } from '../lib/format';
+
+maplibregl.setWorkerUrl(workerUrl);
 
 const cssVar = (name: string, fallback: string) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;

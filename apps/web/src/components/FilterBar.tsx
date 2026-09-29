@@ -18,6 +18,7 @@ export function FilterBar({ compact = false }: { compact?: boolean }) {
         <span className="label mb-0.5 text-xs">From</span>
         <select
           className={select}
+          aria-label="From year"
           value={filters.yearFrom ?? ''}
           onChange={(e) => setFilter('yearFrom', e.target.value || undefined)}
         >
@@ -33,6 +34,7 @@ export function FilterBar({ compact = false }: { compact?: boolean }) {
         <span className="label mb-0.5 text-xs">To</span>
         <select
           className={select}
+          aria-label="To year"
           value={filters.yearTo ?? ''}
           onChange={(e) => setFilter('yearTo', e.target.value || undefined)}
         >
@@ -48,6 +50,7 @@ export function FilterBar({ compact = false }: { compact?: boolean }) {
         <span className="label mb-0.5 text-xs">Airline</span>
         <select
           className={`${select} max-w-[12rem]`}
+          aria-label="Airline"
           value={filters.airline ?? ''}
           onChange={(e) => setFilter('airline', e.target.value || undefined)}
         >
@@ -63,6 +66,7 @@ export function FilterBar({ compact = false }: { compact?: boolean }) {
         <span className="label mb-0.5 text-xs">Cabin</span>
         <select
           className={select}
+          aria-label="Cabin class"
           value={filters.cabin ?? ''}
           onChange={(e) => setFilter('cabin', e.target.value || undefined)}
         >

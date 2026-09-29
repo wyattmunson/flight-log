@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
   const target = env.API_PROXY_TARGET || `http://localhost:${env.API_PORT || 3001}`;
   return {
     plugins: [react()],
+    worker: { format: 'es' },
     server: {
       port: Number(env.WEB_PORT) || 5173,
       proxy: { '/api': { target, changeOrigin: true } },

@@ -14,10 +14,10 @@
     "@flight-log/shared": "*",
     "@tanstack/react-query": "^5.62.0",
     "luxon": "^3.5.0",
-    "maplibre-gl": "^4.7.1",
+    "maplibre-gl": "^6.11.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0",
+    "react-router-dom": "^7.18.4",
     "recharts": "^2.15.0",
     "zod": "^3.24.1"
   },

@@ -7,12 +7,17 @@ import { ErrorState, Spinner } from '../components/States';
 import { formatDate, formatDistance, formatInt } from '../lib/format';
 import { useFilters } from '../lib/useFilters';
 
+const isWide = () =>
+  typeof window === 'undefined' || window.matchMedia?.('(min-width: 640px)').matches !== false;
+
 export function MapPage() {
   const config = useConfig();
   const { filters, active } = useFilters();
   const mapData = useMapData(filters);
   const [selected, setSelected] = useState<string | null>(null);
-  const [panelOpen, setPanelOpen] = useState(true);
+  // On phones, start with panels collapsed so the map stays visible.
+  const [panelOpen, setPanelOpen] = useState(isWide);
+  const [filtersOpen, setFiltersOpen] = useState(isWide);
 
   const airportsById = useMemo(
     () => new Map(mapData.data?.airports.map((a) => [a.id, a]) ?? []),
@@ -61,7 +66,17 @@ export function MapPage() {
           className="pointer-events-auto rounded-xl bg-white/95 p-3 shadow-lg backdrop-blur dark:bg-stone-900/95"
           aria-label="Map filters"
         >
-          <FilterBar compact />
+          <button
+            type="button"
+            className="btn-secondary mb-2 px-2 py-0.5 text-xs sm:hidden"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((o) => !o)}
+          >
+            {filtersOpen ? 'Hide filters' : `Filters${active ? ' (on)' : ''}`}
+          </button>
+          <div className={filtersOpen ? '' : 'hidden sm:block'}>
+            <FilterBar compact />
+          </div>
           <p className="mt-2 text-xs muted" aria-live="polite">
             {mapData.isLoading
               ? 'Loading flights…'
@@ -94,7 +109,7 @@ export function MapPage() {
 
       {mapData.data && totals.routes > 0 && (
         <aside
-          className="absolute inset-x-2 bottom-2 max-h-[45%] overflow-hidden rounded-xl bg-white/95 shadow-lg backdrop-blur dark:bg-stone-900/95 sm:inset-x-auto sm:bottom-auto sm:right-14 sm:top-3 sm:max-h-[calc(100%-1.5rem)] sm:w-80"
+          className="absolute inset-x-2 bottom-10 max-h-[45%] overflow-hidden rounded-xl bg-white/95 shadow-lg backdrop-blur dark:bg-stone-900/95 sm:inset-x-auto sm:bottom-auto sm:right-14 sm:top-3 sm:max-h-[calc(100%-1.5rem)] sm:w-80"
           aria-label="Routes"
         >
           <div className="flex items-center justify-between border-b border-stone-200 px-3 py-2 dark:border-stone-800">
