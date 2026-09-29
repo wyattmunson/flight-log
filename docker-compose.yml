@@ -1,0 +1,74 @@
+name: flight-log
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/dev.Dockerfile
+  image: flight-log-dev
+  working_dir: /app
+  volumes:
+    - ./:/app
+    # Keep the container's Linux node_modules separate from the host's.
+    - node_modules:/app/node_modules
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flightlog}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flightlog}
+      POSTGRES_DB: ${POSTGRES_DB:-flightlog}
+    ports:
+      - '${DB_PORT:-5434}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    <<: *app
+    command: sh docker/api-entrypoint.sh
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-flightlog}:${POSTGRES_PASSWORD:-flightlog}@db:5432/${POSTGRES_DB:-flightlog}
+      TEST_DATABASE_URL: postgresql://${POSTGRES_USER:-flightlog}:${POSTGRES_PASSWORD:-flightlog}@db:5432/flightlog_test
+      API_PORT: 3000
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      IMPORT_PREVIEW_TTL_MINUTES: ${IMPORT_PREVIEW_TTL_MINUTES:-30}
+      DEFAULT_USER_ID: ${DEFAULT_USER_ID:-00000000-0000-4000-8000-000000000001}
+      MAP_STYLE_URL: ${MAP_STYLE_URL:-https://tiles.openfreemap.org/styles/liberty}
+      FLIGHT_API_PROVIDER: ${FLIGHT_API_PROVIDER:-}
+      LOOKUP_CACHE_TTL_HOURS: ${LOOKUP_CACHE_TTL_HOURS:-720}
+      AERODATABOX_RAPIDAPI_KEY: ${AERODATABOX_RAPIDAPI_KEY:-}
+      AVIATIONSTACK_API_KEY: ${AVIATIONSTACK_API_KEY:-}
+      AIRLABS_API_KEY: ${AIRLABS_API_KEY:-}
+      FLIGHTAWARE_AEROAPI_KEY: ${FLIGHTAWARE_AEROAPI_KEY:-}
+    ports:
+      - '${API_PORT:-3001}:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'node -e "fetch(''http://localhost:3000/api/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+
+  web:
+    <<: *app
+    command: npm run dev --workspace @flight-log/web -- --host 0.0.0.0 --port 5173
+    environment:
+      API_PROXY_TARGET: http://api:3000
+      VITE_USE_POLLING: 'true'
+    ports:
+      - '${WEB_PORT:-5173}:5173'
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  node_modules:

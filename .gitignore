@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+# Reference datasets are downloaded at seed time
+data/*
+!data/README.md
+# Never commit personal flight exports; only synthetic fixtures are allowed
+*.csv
+!apps/api/test/fixtures/*.csv
