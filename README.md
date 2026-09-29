@@ -6,6 +6,8 @@ time), then explore it on a great-circle **map** and a **stats dashboard**.
 Phase 1 is the full core app. Phase 2 (live flight-data lookups) is researched in
 [`docs/flight-data-api-analysis.md`](docs/flight-data-api-analysis.md), and the provider seam already exists.
 
+Licensed for **noncommercial use only**. See [License](#license).
+
 **Where things are documented**
 
 | Document                                                               | For           | Contents                                                                                               |
@@ -380,3 +382,27 @@ normalization rules change.
   data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 
 These attributions also appear in the app footer and the map's attribution control.
+
+## License
+
+Copyright (c) 2026 Wyatt Munson. Licensed under the
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
+(SPDX: `PolyForm-Noncommercial-1.0.0`); the full text is in [`LICENSE.md`](LICENSE.md).
+
+- **Allowed:** any noncommercial purpose, including personal use, hobby projects, study, research,
+  and use by charities, schools, public research organizations and government institutions. You may
+  modify the code and share copies (including modified ones) for those purposes.
+- **Not allowed:** commercial use, such as selling it, offering it as a paid service, or using it in
+  a business's operations. That needs a separate license from the copyright holder.
+- **When sharing copies,** include the license terms (or their URL) and the `Required Notice:` line
+  from `LICENSE.md`.
+- This is a source-available license, **not** an OSI-approved open-source license.
+
+**Scope.** The license covers this repository's own code and documentation. Third-party components
+keep their own licenses, and this license doesn't restrict them:
+
+- npm dependencies are all permissively licensed (MIT, ISC, Apache-2.0, BSD, CC0; checked 2026-09-29).
+- Reference data downloaded at seed time is not part of this repository. OurAirports is public
+  domain. OpenFlights airline data is under the ODbL 1.0, which requires attribution and imposes
+  share-alike terms on a publicly used _derived database_. OpenStreetMap-based map tiles require
+  attribution. See [Data attributions](#data-attributions).

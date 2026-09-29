@@ -67,6 +67,11 @@ tests use the separate `flightlog_test` database (`TEST_DATABASE_URL`), never th
    an API shape, change the type there and fix both sides. Don't define API types locally.
 10. **Data hygiene.** Never commit `.env`, real flight exports, or `data/*` downloads. Test
     fixtures must be synthetic (`apps/api/test/fixtures/`).
+11. **License.** The repo is under PolyForm Noncommercial 1.0.0 (`LICENSE.md`, `"license"` in every
+    `package.json`). Keep `LICENSE.md` verbatim, including its `Required Notice:` line. Only add
+    permissively licensed dependencies or code (MIT, ISC, BSD, Apache-2.0, CC0, …). No GPL/AGPL/LGPL
+    or other copyleft: their terms conflict with the noncommercial restriction. Ask before adding
+    anything else. New workspaces get the same `"license"` field.
 
 ## Gotchas
 

@@ -4,3 +4,4 @@ coverage
 data
 apps/api/prisma/migrations
 package-lock.json
+LICENSE.md
