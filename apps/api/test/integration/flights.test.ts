@@ -58,36 +58,54 @@ describe('POST /api/flights', () => {
   });
 
   it('accepts a free-text airline and honors explicit offsets', async () => {
-    const res = await api().post('/api/flights').send({
-      ...transAtlantic,
-      airlineId: null,
-      airlineNameRaw: 'Imaginary Air',
-      takeoffActual: '2023-06-01T23:12:00Z',
-    });
+    const res = await api()
+      .post('/api/flights')
+      .send({
+        ...transAtlantic,
+        airlineId: null,
+        airlineNameRaw: 'Imaginary Air',
+        takeoffActual: '2023-06-01T23:12:00Z',
+      });
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ airline: null, airlineNameRaw: 'Imaginary Air', takeoffActual: '2023-06-01T23:12:00.000Z' });
+    expect(res.body).toMatchObject({
+      airline: null,
+      airlineNameRaw: 'Imaginary Air',
+      takeoffActual: '2023-06-01T23:12:00.000Z',
+    });
   });
 
   it('validates input', async () => {
-    const res = await api().post('/api/flights').send({ ...transAtlantic, flightDate: '06/01/2023', originAirportId: 'x' });
+    const res = await api()
+      .post('/api/flights')
+      .send({ ...transAtlantic, flightDate: '06/01/2023', originAirportId: 'x' });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('validation_error');
     const paths = res.body.error.details.map((d: { path: string }) => d.path);
     expect(paths).toEqual(expect.arrayContaining(['flightDate', 'originAirportId']));
 
-    const noAirline = await api().post('/api/flights').send({ ...transAtlantic, airlineId: null });
+    const noAirline = await api()
+      .post('/api/flights')
+      .send({ ...transAtlantic, airlineId: null });
     expect(noAirline.status).toBe(400);
 
-    const badAirport = await api().post('/api/flights').send({ ...transAtlantic, originAirportId: 999999 });
-    expect(badAirport.body.error.details).toEqual([{ path: 'originAirportId', message: 'Unknown airport' }]);
+    const badAirport = await api()
+      .post('/api/flights')
+      .send({ ...transAtlantic, originAirportId: 999999 });
+    expect(badAirport.body.error.details).toEqual([
+      { path: 'originAirportId', message: 'Unknown airport' },
+    ]);
 
-    const badTime = await api().post('/api/flights').send({ ...transAtlantic, takeoffActual: 'noon' });
+    const badTime = await api()
+      .post('/api/flights')
+      .send({ ...transAtlantic, takeoffActual: 'noon' });
     expect(badTime.body.error.details[0].path).toBe('takeoffActual');
   });
 
   it('rejects an exact duplicate (dedupe rule 2) with 409', async () => {
     await api().post('/api/flights').send(transAtlantic).expect(201);
-    const dup = await api().post('/api/flights').send({ ...transAtlantic, flightNumber: '0100' });
+    const dup = await api()
+      .post('/api/flights')
+      .send({ ...transAtlantic, flightNumber: '0100' });
     expect(dup.status).toBe(409);
     expect(dup.body.error.code).toBe('conflict');
   });
@@ -126,7 +144,11 @@ describe('GET /api/flights', () => {
     await importFixture();
     const res = await api().get('/api/filter-options');
     expect(res.body.years).toEqual([2024, 2023]);
-    expect(res.body.airlines).toContainEqual({ value: 'raw:Aurora Skyways Charter', label: 'Aurora Skyways Charter', count: 1 });
+    expect(res.body.airlines).toContainEqual({
+      value: 'raw:Aurora Skyways Charter',
+      label: 'Aurora Skyways Charter',
+      count: 1,
+    });
     expect(res.body.cabins.map((c: { value: string }) => c.value)).toContain('Economy');
   });
 });
@@ -158,7 +180,7 @@ describe('GET/PATCH/DELETE /api/flights/:id', () => {
     await api().delete(`/api/flights/${created.id}`).expect(404);
   });
 
-  it('never exposes another user\'s flights', async () => {
+  it("never exposes another user's flights", async () => {
     const other = await prisma.flight.create({
       data: {
         userId: OTHER_USER_ID,

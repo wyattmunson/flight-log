@@ -5,7 +5,9 @@ import { createApp } from '../src/app';
 import { prisma } from '../src/db';
 import type { FlightLookupProvider } from '../src/lookup/types';
 
-export const FIXTURE_PATH = fileURLToPath(new URL('./fixtures/flighty-sample.csv', import.meta.url));
+export const FIXTURE_PATH = fileURLToPath(
+  new URL('./fixtures/flighty-sample.csv', import.meta.url),
+);
 export const fixtureCsv = () => readFileSync(FIXTURE_PATH);
 export const OTHER_USER_ID = '00000000-0000-4000-8000-0000000000aa';
 
@@ -23,7 +25,9 @@ export async function resetUserData() {
 }
 
 export async function importFixture(app = api()) {
-  const preview = await app.post('/api/import/preview').attach('file', fixtureCsv(), 'flighty-sample.csv');
+  const preview = await app
+    .post('/api/import/preview')
+    .attach('file', fixtureCsv(), 'flighty-sample.csv');
   if (preview.status !== 200) throw new Error(`preview failed: ${JSON.stringify(preview.body)}`);
   const commit = await app.post('/api/import/commit').send({ previewId: preview.body.previewId });
   if (commit.status !== 201) throw new Error(`commit failed: ${JSON.stringify(commit.body)}`);

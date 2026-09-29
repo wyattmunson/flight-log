@@ -63,7 +63,8 @@ export async function mapData(userId: string, filters: FlightFilters): Promise<M
           count: r.count,
           distanceMiles,
           path: greatCirclePoints(pa, pb, segments).map(
-            ([lon, lat]) => [Math.round(lon * 1e4) / 1e4, Math.round(lat * 1e4) / 1e4] as [number, number],
+            ([lon, lat]) =>
+              [Math.round(lon * 1e4) / 1e4, Math.round(lat * 1e4) / 1e4] as [number, number],
           ),
         },
       ];

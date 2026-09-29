@@ -20,10 +20,16 @@ describe('POST /api/import/preview', () => {
 
     const byLine = Object.fromEntries(res.body.sample.map((r: { line: number }) => [r.line, r]));
     expect(byLine[11]).toMatchObject({ status: 'invalid', origin: 'ZZX' });
-    expect(byLine[11].errors[0]).toMatchObject({ column: 'From', message: 'Unknown airport "ZZX"' });
+    expect(byLine[11].errors[0]).toMatchObject({
+      column: 'From',
+      message: 'Unknown airport "ZZX"',
+    });
     expect(byLine[17]).toMatchObject({ status: 'invalid' });
     expect(byLine[17].errors[0].column).toBe('Date');
-    expect(byLine[12]).toMatchObject({ status: 'duplicate', duplicateReason: expect.stringMatching(/Flighty ID/) });
+    expect(byLine[12]).toMatchObject({
+      status: 'duplicate',
+      duplicateReason: expect.stringMatching(/Flighty ID/),
+    });
     expect(byLine[18]).toMatchObject({ status: 'duplicate', flightDate: '2024-05-05' });
     expect(byLine[10]).toMatchObject({ status: 'new', airline: 'Aurora Skyways Charter' });
     expect(byLine[10].warnings[0]).toMatch(/not found/);
@@ -32,7 +38,9 @@ describe('POST /api/import/preview', () => {
   });
 
   it('rejects non-CSV uploads and files missing required columns', async () => {
-    const wrongType = await api().post('/api/import/preview').attach('file', Buffer.from('{}'), 'data.json');
+    const wrongType = await api()
+      .post('/api/import/preview')
+      .attach('file', Buffer.from('{}'), 'data.json');
     expect(wrongType.status).toBe(415);
     expect(wrongType.body.error.code).toBe('unsupported_file');
 
@@ -40,7 +48,10 @@ describe('POST /api/import/preview', () => {
       .post('/api/import/preview')
       .attach('file', Buffer.from('Date,Airline\n2024-01-01,UA\n'), 'x.csv');
     expect(noCols.status).toBe(422);
-    expect(noCols.body.error).toMatchObject({ code: 'missing_columns', details: { missingColumns: ['From', 'To'] } });
+    expect(noCols.body.error).toMatchObject({
+      code: 'missing_columns',
+      details: { missingColumns: ['From', 'To'] },
+    });
 
     const none = await api().post('/api/import/preview');
     expect(none.status).toBe(400);
@@ -62,7 +73,13 @@ describe('POST /api/import/commit', () => {
 
     expect(await prisma.flight.count()).toBe(13);
     const batch = await prisma.importBatch.findUniqueOrThrow({ where: { id: summary.batchId } });
-    expect(batch).toMatchObject({ status: 'committed', imported: 13, duplicates: 2, failed: 2, total: 17 });
+    expect(batch).toMatchObject({
+      status: 'committed',
+      imported: 13,
+      duplicates: 2,
+      failed: 2,
+      total: 17,
+    });
 
     const sfoNrt = await prisma.flight.findFirstOrThrow({ where: { flightyId: 'fx-0001' } });
     expect(sfoNrt).toMatchObject({
@@ -82,21 +99,32 @@ describe('POST /api/import/commit', () => {
     expect(sfoNrt.takeoffActual?.toISOString()).toBe('2023-01-15T19:38:00.000Z');
     expect((sfoNrt.sourceRaw as Record<string, string>)['Flight Flighty ID']).toBe('fx-0001');
 
-    const unknownAirline = await prisma.flight.findFirstOrThrow({ where: { flightyId: 'fx-0009' } });
-    expect(unknownAirline).toMatchObject({ airlineId: null, airlineNameRaw: 'Aurora Skyways Charter' });
+    const unknownAirline = await prisma.flight.findFirstOrThrow({
+      where: { flightyId: 'fx-0009' },
+    });
+    expect(unknownAirline).toMatchObject({
+      airlineId: null,
+      airlineNameRaw: 'Aurora Skyways Charter',
+    });
 
     const noFlightyId = await prisma.flight.findFirstOrThrow({ where: { flightyId: null } });
     expect(noFlightyId).toMatchObject({ airlineId: AIRLINE_ID.HA, flightNumber: '11' });
 
     // Reference rows remember their Flighty IDs; aircraft types are upserted once.
-    expect((await prisma.airport.findUniqueOrThrow({ where: { id: AIRPORT_ID.SFO } })).flightyId).toBe('fx-ap-sfo');
-    expect((await prisma.airline.findUniqueOrThrow({ where: { id: AIRLINE_ID.UA } })).flightyId).toBe('fx-al-ua');
+    expect(
+      (await prisma.airport.findUniqueOrThrow({ where: { id: AIRPORT_ID.SFO } })).flightyId,
+    ).toBe('fx-ap-sfo');
+    expect(
+      (await prisma.airline.findUniqueOrThrow({ where: { id: AIRLINE_ID.UA } })).flightyId,
+    ).toBe('fx-al-ua');
     expect(await prisma.aircraftType.count({ where: { name: 'Boeing 787-9' } })).toBe(1);
   });
 
   it('is idempotent: re-uploading reports every row as a duplicate', async () => {
     const { summary } = await importFixture();
-    const again = await api().post('/api/import/preview').attach('file', fixtureCsv(), 'flighty-sample.csv');
+    const again = await api()
+      .post('/api/import/preview')
+      .attach('file', fixtureCsv(), 'flighty-sample.csv');
     expect(again.body.counts).toEqual({ total: 17, new: 0, duplicate: 15, invalid: 2 });
     expect(again.body.previouslyImportedBatchId).toBe(summary.batchId);
 
@@ -115,7 +143,7 @@ describe('POST /api/import/commit', () => {
     expect(await prisma.flight.count()).toBe(13);
   });
 
-  it('rejects unknown, reused or other users\' previews', async () => {
+  it("rejects unknown, reused or other users' previews", async () => {
     const app = api();
     const p = await app.post('/api/import/preview').attach('file', fixtureCsv(), 'a.csv');
     await app.post('/api/import/commit').send({ previewId: p.body.previewId }).expect(201);
@@ -132,7 +160,11 @@ describe('import batches', () => {
     const { summary } = await importFixture();
     const list = await api().get('/api/import/batches');
     expect(list.body).toHaveLength(1);
-    expect(list.body[0]).toMatchObject({ id: summary.batchId, status: 'committed', remainingFlights: 13 });
+    expect(list.body[0]).toMatchObject({
+      id: summary.batchId,
+      status: 'committed',
+      remainingFlights: 13,
+    });
 
     const undo = await api().delete(`/api/import/batches/${summary.batchId}`);
     expect(undo.status).toBe(200);

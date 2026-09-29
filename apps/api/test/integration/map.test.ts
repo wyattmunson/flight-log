@@ -37,8 +37,17 @@ describe('GET /api/map', () => {
 
   it('lists the flights on a route, in both directions', async () => {
     const res = await api().get(`/api/map/routes/${AIRPORT_ID.NRT}/${AIRPORT_ID.SFO}/flights`);
-    expect(res.body.map((f: { flightDate: string }) => f.flightDate)).toEqual(['2024-04-01', '2023-01-25', '2023-01-15']);
-    expect(res.body[1]).toMatchObject({ airline: 'United Airlines', flightNumber: 'UA838', origin: 'NRT', destination: 'SFO' });
+    expect(res.body.map((f: { flightDate: string }) => f.flightDate)).toEqual([
+      '2024-04-01',
+      '2023-01-25',
+      '2023-01-15',
+    ]);
+    expect(res.body[1]).toMatchObject({
+      airline: 'United Airlines',
+      flightNumber: 'UA838',
+      origin: 'NRT',
+      destination: 'SFO',
+    });
   });
 
   it('applies filters', async () => {

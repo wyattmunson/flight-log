@@ -129,14 +129,26 @@ export async function buildPreview(
     if (!p.flight) return { ...p, status: 'invalid' };
     if (p.flight.flightyId) {
       const id = p.flight.flightyId;
-      if (dbFlightyIds.has(id)) return { ...p, status: 'duplicate', duplicateReason: 'Already imported (same Flighty ID)' };
-      if (seenFlighty.has(id)) return { ...p, status: 'duplicate', duplicateReason: 'Repeated Flighty ID earlier in this file' };
+      if (dbFlightyIds.has(id))
+        return { ...p, status: 'duplicate', duplicateReason: 'Already imported (same Flighty ID)' };
+      if (seenFlighty.has(id))
+        return {
+          ...p,
+          status: 'duplicate',
+          duplicateReason: 'Repeated Flighty ID earlier in this file',
+        };
       seenFlighty.add(id);
       return { ...p, status: 'new' };
     }
     const key = naturalKey(p.flight);
-    if (dbNaturalKeys.has(key)) return { ...p, status: 'duplicate', duplicateReason: 'Already in your log (same date, airline, flight and route)' };
-    if (seenNatural.has(key)) return { ...p, status: 'duplicate', duplicateReason: 'Repeated earlier in this file' };
+    if (dbNaturalKeys.has(key))
+      return {
+        ...p,
+        status: 'duplicate',
+        duplicateReason: 'Already in your log (same date, airline, flight and route)',
+      };
+    if (seenNatural.has(key))
+      return { ...p, status: 'duplicate', duplicateReason: 'Repeated earlier in this file' };
     seenNatural.add(key);
     return { ...p, status: 'new' };
   });

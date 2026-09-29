@@ -23,7 +23,8 @@ const toDate = (iso: string) => new Date(`${iso}T00:00:00Z`);
 export function filtersWhere(userId: string, f: FlightFilters): Prisma.FlightWhereInput {
   const where: Prisma.FlightWhereInput = { userId };
   const { from, to } = yearRange(f);
-  if (from || to) where.flightDate = { gte: from ? toDate(from) : undefined, lte: to ? toDate(to) : undefined };
+  if (from || to)
+    where.flightDate = { gte: from ? toDate(from) : undefined, lte: to ? toDate(to) : undefined };
   const airline = parseAirlineFilter(f.airline);
   if (airline?.kind === 'id') where.airlineId = airline.id;
   if (airline?.kind === 'raw') {

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
 import { normalizeFlightNumber, type LookupResponse } from '@flight-log/shared';
 import { prisma } from '../db';
 import { env } from '../env';

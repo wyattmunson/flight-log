@@ -13,7 +13,13 @@ describe('mapHeaders', () => {
   });
 
   it('matches case-insensitively, trims, strips a BOM and reports unknown columns', () => {
-    const m = mapHeaders(['﻿date', '  FROM ', 'to', 'take OFF  (scheduled)', 'Loyalty Points']);
+    const m = mapHeaders([
+      '\uFEFFdate',
+      '  FROM ',
+      'to',
+      'take OFF  (scheduled)',
+      'Loyalty Points',
+    ]);
     expect(m.fields).toEqual(['date', 'from', 'to', 'takeoffScheduled', undefined]);
     expect(m.unknownColumns).toEqual(['Loyalty Points']);
     expect(m.missingRequired).toEqual([]);

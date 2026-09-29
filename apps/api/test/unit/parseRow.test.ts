@@ -4,12 +4,38 @@ import type { ReferenceIndex } from '../../src/dal/reference';
 import { naturalKey, parseRow, resolveAirline } from '../../src/import/parseRow';
 import type { FlightyRecord } from '../../src/import/columns';
 
-const airport = (id: number, iata: string, icao: string, lat: number, lon: number, tz: string): Airport => ({
-  id, ident: icao, iataCode: iata, icaoCode: icao, name: iata, municipality: null, isoCountry: 'US',
-  isoRegion: null, latitude: lat, longitude: lon, elevationFt: null, type: 'large_airport', timezone: tz, flightyId: null,
+const airport = (
+  id: number,
+  iata: string,
+  icao: string,
+  lat: number,
+  lon: number,
+  tz: string,
+): Airport => ({
+  id,
+  ident: icao,
+  iataCode: iata,
+  icaoCode: icao,
+  name: iata,
+  municipality: null,
+  isoCountry: 'US',
+  isoRegion: null,
+  latitude: lat,
+  longitude: lon,
+  elevationFt: null,
+  type: 'large_airport',
+  timezone: tz,
+  flightyId: null,
 });
 const airline = (id: number, name: string, iata: string, icao: string): Airline => ({
-  id, name, iataCode: iata, icaoCode: icao, callsign: null, country: null, active: true, flightyId: null,
+  id,
+  name,
+  iataCode: iata,
+  icaoCode: icao,
+  callsign: null,
+  country: null,
+  active: true,
+  flightyId: null,
 });
 
 const JFK = airport(3622, 'JFK', 'KJFK', 40.639447, -73.779317, 'America/New_York');
@@ -47,7 +73,12 @@ const base: FlightyRecord = {
 
 describe('parseRow', () => {
   it('parses a complete trans-Atlantic row into UTC times, distance and air time', () => {
-    const r = parseRow({ ...base, cabinClass: 'BUSINESS', seatType: 'aisle', pnr: 'ABC123' }, {}, 2, index());
+    const r = parseRow(
+      { ...base, cabinClass: 'BUSINESS', seatType: 'aisle', pnr: 'ABC123' },
+      {},
+      2,
+      index(),
+    );
     expect(r.errors).toEqual([]);
     const f = r.flight!;
     expect(f.flightDate).toBe('2023-06-01');
@@ -64,7 +95,9 @@ describe('parseRow', () => {
 
   it('resolves airlines by ICAO and by name', () => {
     expect(parseRow({ ...base, airline: 'BAW' }, {}, 2, index()).flight?.airlineId).toBe(BA.id);
-    expect(parseRow({ ...base, airline: 'british airways' }, {}, 2, index()).flight?.airlineId).toBe(BA.id);
+    expect(
+      parseRow({ ...base, airline: 'british airways' }, {}, 2, index()).flight?.airlineId,
+    ).toBe(BA.id);
   });
 
   it('falls back to the carrier prefix in the flight number', () => {
@@ -88,9 +121,12 @@ describe('parseRow', () => {
   });
 
   it('resolves ICAO airport codes and falls back to a known Flighty airport id', () => {
-    expect(parseRow({ ...base, from: 'KJFK' }, {}, 2, index()).flight?.originAirportId).toBe(JFK.id);
+    expect(parseRow({ ...base, from: 'KJFK' }, {}, 2, index()).flight?.originAirportId).toBe(
+      JFK.id,
+    );
     expect(
-      parseRow({ ...base, from: null, flightyDepartureAirportId: 'fx-ap-jfk' }, {}, 2, index()).errors,
+      parseRow({ ...base, from: null, flightyDepartureAirportId: 'fx-ap-jfk' }, {}, 2, index())
+        .errors,
     ).toEqual([{ line: 2, column: 'From', message: 'Departure airport is required' }]);
   });
 
@@ -102,7 +138,14 @@ describe('parseRow', () => {
 
   it('computes distance to the diversion airport and uses its zone for actual arrival times', () => {
     const r = parseRow(
-      { ...base, from: 'SEA', to: 'SFO', divertedTo: 'OAK', takeoffActual: '2023-08-05T07:20', landingActual: '2023-08-05T09:10' },
+      {
+        ...base,
+        from: 'SEA',
+        to: 'SFO',
+        divertedTo: 'OAK',
+        takeoffActual: '2023-08-05T07:20',
+        landingActual: '2023-08-05T09:10',
+      },
       {},
       2,
       index(),

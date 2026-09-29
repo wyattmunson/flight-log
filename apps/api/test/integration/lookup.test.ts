@@ -23,7 +23,9 @@ describe('POST /api/lookup', () => {
     const spy = vi.spyOn(stub, 'lookup');
     const app = api({ lookupProvider: stub });
 
-    const first = await app.post('/api/lookup').send({ flightNumber: 'ua 0837', date: '2024-04-01' });
+    const first = await app
+      .post('/api/lookup')
+      .send({ flightNumber: 'ua 0837', date: '2024-04-01' });
     expect(first.status).toBe(200);
     expect(first.body).toMatchObject({ configured: true, provider: 'stub', cached: false });
     expect(first.body.results[0]).toMatchObject({
@@ -35,7 +37,9 @@ describe('POST /api/lookup', () => {
       takeoffActual: '2024-04-01T18:37:00Z',
     });
 
-    const second = await app.post('/api/lookup').send({ flightNumber: 'UA837', date: '2024-04-01' });
+    const second = await app
+      .post('/api/lookup')
+      .send({ flightNumber: 'UA837', date: '2024-04-01' });
     expect(second.body.cached).toBe(true);
     expect(second.body.results).toEqual(first.body.results);
     expect(spy).toHaveBeenCalledTimes(1);
@@ -51,8 +55,12 @@ describe('POST /api/lookup', () => {
     const app = api({ lookupProvider: new StubProvider() });
     const none = await app.post('/api/lookup').send({ flightNumber: 'ZZ1', date: '2024-04-01' });
     expect(none.body.results).toEqual([]);
-    expect((await app.post('/api/lookup').send({ flightNumber: '837', date: '2024-04-01' })).status).toBe(400);
-    expect((await app.post('/api/lookup').send({ flightNumber: 'UA837', date: 'tomorrow' })).status).toBe(400);
+    expect(
+      (await app.post('/api/lookup').send({ flightNumber: '837', date: '2024-04-01' })).status,
+    ).toBe(400);
+    expect(
+      (await app.post('/api/lookup').send({ flightNumber: 'UA837', date: 'tomorrow' })).status,
+    ).toBe(400);
   });
 
   it('selects providers from FLIGHT_API_PROVIDER', () => {

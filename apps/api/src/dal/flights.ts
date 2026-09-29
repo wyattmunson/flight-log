@@ -1,7 +1,7 @@
 /**
  * User-owned flight data. Every function takes `userId` first and scopes by it.
  */
-import { Prisma } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
 import type {
   FilterOptions,
   FlightDetail,
@@ -143,7 +143,10 @@ export function findFlight(userId: string, id: string) {
   return prisma.flight.findFirst({ where: { id, userId }, include: flightInclude });
 }
 
-export function createFlight(userId: string, data: Omit<Prisma.FlightUncheckedCreateInput, 'userId'>) {
+export function createFlight(
+  userId: string,
+  data: Omit<Prisma.FlightUncheckedCreateInput, 'userId'>,
+) {
   return prisma.flight.create({ data: { ...data, userId }, include: flightInclude });
 }
 
@@ -169,7 +172,14 @@ export async function routeFlights(
   filters: FlightFilters,
 ): Promise<RouteFlight[]> {
   const rows = await prisma.$queryRaw<
-    { id: string; flight_date: Date; airline: string | null; flight_number: string | null; origin: string | null; destination: string | null }[]
+    {
+      id: string;
+      flight_date: Date;
+      airline: string | null;
+      flight_number: string | null;
+      origin: string | null;
+      destination: string | null;
+    }[]
   >`
     SELECT f.id, f.flight_date, COALESCE(al.name, f.airline_name_raw) AS airline,
            CASE WHEN f.flight_number IS NULL THEN NULL

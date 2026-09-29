@@ -71,7 +71,10 @@ export function isValidZone(zone: string | null | undefined): zone is string {
  *   (the relevant airport's IANA timezone). Falls back to UTC if the zone is unknown.
  * - Empty values are `null`.
  */
-export function parseFlightTime(value: unknown, zone: string | null | undefined): ParseResult<string | null> {
+export function parseFlightTime(
+  value: unknown,
+  zone: string | null | undefined,
+): ParseResult<string | null> {
   const s = value === null || value === undefined ? '' : String(value).trim();
   if (s === '') return { ok: true, value: null };
   const tz = isValidZone(zone) ? zone : 'UTC';
@@ -156,7 +159,10 @@ export function toLocalParts(utc: string | Date, zone: string | null | undefined
 }
 
 /** UTC instant → value for an `<input type="datetime-local">` in the airport's zone. */
-export function toLocalInputValue(utc: string | null | undefined, zone: string | null | undefined): string {
+export function toLocalInputValue(
+  utc: string | null | undefined,
+  zone: string | null | undefined,
+): string {
   if (!utc) return '';
   const dt = DateTime.fromISO(utc).setZone(isValidZone(zone) ? zone : 'UTC');
   return dt.isValid ? dt.toFormat("yyyy-MM-dd'T'HH:mm") : '';

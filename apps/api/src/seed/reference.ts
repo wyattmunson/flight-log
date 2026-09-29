@@ -98,7 +98,11 @@ const nullish = (v: string | undefined) => {
 
 /** OpenFlights airlines.dat: id,name,alias,iata,icao,callsign,country,active (a few rows have extra columns). */
 export function parseAirlines(dat: string): Prisma.AirlineCreateManyInput[] {
-  const rows = parse(dat, { relax_column_count: true, relax_quotes: true, skip_empty_lines: true }) as string[][];
+  const rows = parse(dat, {
+    relax_column_count: true,
+    relax_quotes: true,
+    skip_empty_lines: true,
+  }) as string[][];
   const out: Prisma.AirlineCreateManyInput[] = [];
   for (const r of rows) {
     const id = Number(r[0]);
@@ -122,7 +126,8 @@ export function parseAirlines(dat: string): Prisma.AirlineCreateManyInput[] {
 
 async function insertChunked<T>(items: T[], insert: (chunk: T[]) => Promise<{ count: number }>) {
   let count = 0;
-  for (let i = 0; i < items.length; i += 5000) count += (await insert(items.slice(i, i + 5000))).count;
+  for (let i = 0; i < items.length; i += 5000)
+    count += (await insert(items.slice(i, i + 5000))).count;
   return count;
 }
 

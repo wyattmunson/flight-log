@@ -40,7 +40,12 @@ export type FlightyRecord = Partial<Record<FlightyField, string | null>>;
 
 export const REQUIRED_FIELDS: FlightyField[] = ['date', 'from', 'to'];
 
-const normalizeHeader = (h: string) => h.replace(/^﻿/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const normalizeHeader = (h: string) =>
+  h
+    .replace(/^\uFEFF/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 
 const HEADER_LOOKUP = new Map<string, FlightyField>(
   Object.entries(FLIGHTY_COLUMNS).map(([field, header]) => [
@@ -61,7 +66,7 @@ export interface HeaderMapping {
 
 /** Match headers case-insensitively and whitespace-tolerantly; report unknown and missing ones. */
 export function mapHeaders(headerRow: string[]): HeaderMapping {
-  const headers = headerRow.map((h) => h.replace(/^﻿/, '').trim());
+  const headers = headerRow.map((h) => h.replace(/^\uFEFF/, '').trim());
   const seen = new Set<FlightyField>();
   const unknownColumns: string[] = [];
   const fields = headers.map((h) => {

@@ -33,7 +33,8 @@ async function prepare(input: FlightInputParsed): Promise<FlightData> {
   }
 
   const airline = input.airlineId != null ? await getAirline(input.airlineId) : null;
-  if (input.airlineId != null && !airline) issues.push({ path: 'airlineId', message: 'Unknown airline' });
+  if (input.airlineId != null && !airline)
+    issues.push({ path: 'airlineId', message: 'Unknown airline' });
 
   if (!origin || !destination || issues.length) {
     throw new AppError(400, 'validation_error', 'Request validation failed', issues);
@@ -88,7 +89,11 @@ export async function createManualFlight(userId: string, body: unknown): Promise
  * PATCH: merge the patch over the stored flight (stored times are UTC ISO strings, which
  * `parseFlightTime` honors as-is) and recompute every derived value.
  */
-export async function updateFlight(userId: string, id: string, body: unknown): Promise<FlightDetail> {
+export async function updateFlight(
+  userId: string,
+  id: string,
+  body: unknown,
+): Promise<FlightDetail> {
   const patch = FlightPatchSchema.parse(body);
   const existing = await flightsDal.findFlight(userId, id);
   if (!existing) throw notFound('Flight');

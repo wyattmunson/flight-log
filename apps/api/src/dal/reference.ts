@@ -126,7 +126,11 @@ function airlineRank(a: Airline) {
 function preferAirline(map: Map<string, Airline>, key: string | null, a: Airline) {
   if (!key) return;
   const cur = map.get(key);
-  if (!cur || airlineRank(a) < airlineRank(cur) || (airlineRank(a) === airlineRank(cur) && a.id < cur.id)) {
+  if (
+    !cur ||
+    airlineRank(a) < airlineRank(cur) ||
+    (airlineRank(a) === airlineRank(cur) && a.id < cur.id)
+  ) {
     map.set(key, a);
   }
 }

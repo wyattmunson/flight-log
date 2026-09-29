@@ -234,7 +234,11 @@ export async function computeStats(userId: string, filters: FlightFilters): Prom
       aircraftTypes: r.aircraft_types as string[],
       airlines: r.airlines as string[],
     })),
-    perYear: perYear.map((r) => ({ year: num(r.year), flights: num(r.flights), miles: round1(num(r.miles)) })),
+    perYear: perYear.map((r) => ({
+      year: num(r.year),
+      flights: num(r.flights),
+      miles: round1(num(r.miles)),
+    })),
     perMonth: perMonth.map((r) => ({
       month: r.month as string,
       flights: num(r.flights),
@@ -255,7 +259,9 @@ export async function computeStats(userId: string, filters: FlightFilters): Prom
             distanceMiles: num(route.distance_miles),
           }
         : null,
-      busiestDay: day ? { date: dateOnly(day.flight_date as Date), flights: num(day.flights) } : null,
+      busiestDay: day
+        ? { date: dateOnly(day.flight_date as Date), flights: num(day.flights) }
+        : null,
     },
     punctuality: {
       thresholdMinutes: ON_TIME_THRESHOLD_MINUTES,

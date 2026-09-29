@@ -12,3 +12,6 @@ data/*
 # Never commit personal flight exports; only synthetic fixtures are allowed
 *.csv
 !apps/api/test/fixtures/*.csv
+
+# Local editor/agent settings
+.claude/

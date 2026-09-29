@@ -15,7 +15,12 @@ import {
   type ImportRowError,
 } from '@flight-log/shared';
 import type { ReferenceIndex } from '../dal/reference';
-import { airTimeFrom, convertTimes, flightDistanceMiles, type FlightTimeValues } from '../services/derive';
+import {
+  airTimeFrom,
+  convertTimes,
+  flightDistanceMiles,
+  type FlightTimeValues,
+} from '../services/derive';
 import { FLIGHTY_COLUMNS, type FlightyRecord } from './columns';
 
 export interface PreparedFlight {
@@ -183,8 +188,10 @@ export function parseRow(
   }
 
   const refAirports: [number, string][] = [];
-  if (record.flightyDepartureAirportId) refAirports.push([origin.id, record.flightyDepartureAirportId]);
-  if (record.flightyArrivalAirportId) refAirports.push([destination.id, record.flightyArrivalAirportId]);
+  if (record.flightyDepartureAirportId)
+    refAirports.push([origin.id, record.flightyDepartureAirportId]);
+  if (record.flightyArrivalAirportId)
+    refAirports.push([destination.id, record.flightyArrivalAirportId]);
   if (divertedTo && record.flightyDivertedAirportId) {
     refAirports.push([divertedTo.id, record.flightyDivertedAirportId]);
   }

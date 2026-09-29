@@ -5,7 +5,9 @@ const optionalText = (max = 500) =>
     .string()
     .max(max)
     .nullish()
-    .transform((v) => (v === undefined ? undefined : v === null || v.trim() === '' ? null : v.trim()));
+    .transform((v) =>
+      v === undefined ? undefined : v === null || v.trim() === '' ? null : v.trim(),
+    );
 
 /**
  * A timestamp as entered by a user. Either an ISO string with an offset/`Z` (honored as-is),
@@ -16,7 +18,9 @@ const flightTime = z
   .string()
   .max(40)
   .nullish()
-  .transform((v) => (v === undefined ? undefined : v === null || v.trim() === '' ? null : v.trim()));
+  .transform((v) =>
+    v === undefined ? undefined : v === null || v.trim() === '' ? null : v.trim(),
+  );
 
 export const FLIGHT_TIME_FIELDS = [
   'gateDepartureScheduled',

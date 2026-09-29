@@ -10,7 +10,12 @@ describe('parseAirports (OurAirports)', () => {
   it('keeps airports with an IATA or ICAO code and derives the timezone', () => {
     const rows = parseAirports(csv);
     expect(rows.map((r) => r.iataCode)).toEqual(['SFO', 'NRT']);
-    expect(rows[0]).toMatchObject({ id: 3878, icaoCode: 'KSFO', timezone: 'America/Los_Angeles', elevationFt: 13 });
+    expect(rows[0]).toMatchObject({
+      id: 3878,
+      icaoCode: 'KSFO',
+      timezone: 'America/Los_Angeles',
+      elevationFt: 13,
+    });
     expect(rows[1]!.timezone).toBe('Asia/Tokyo');
   });
 });
@@ -24,7 +29,12 @@ describe('parseAirlines (OpenFlights)', () => {
   it('parses \\N as null, skips the placeholder row and tolerates extra columns', () => {
     const rows = parseAirlines(dat);
     expect(rows.map((r) => r.id)).toEqual([24, 439, 2]);
-    expect(rows[0]).toMatchObject({ iataCode: 'AA', icaoCode: 'AAL', country: 'United States', active: true });
+    expect(rows[0]).toMatchObject({
+      iataCode: 'AA',
+      icaoCode: 'AAL',
+      country: 'United States',
+      active: true,
+    });
     expect(rows[1]).toMatchObject({ iataCode: 'AS', active: true });
     expect(rows[2]).toMatchObject({ iataCode: null, icaoCode: 'GNL', active: false });
   });

@@ -57,7 +57,9 @@ export type AirlineCodeKind = 'iata' | 'icao' | 'name';
  * Guess how an airline cell should be matched: 2-char codes are IATA, 3-letter codes are ICAO,
  * everything else is a name. Resolution still falls back through all three.
  */
-export function classifyAirlineValue(value: unknown): { kind: AirlineCodeKind; value: string } | null {
+export function classifyAirlineValue(
+  value: unknown,
+): { kind: AirlineCodeKind; value: string } | null {
   const s = cleanText(value);
   if (!s) return null;
   const up = s.toUpperCase();
@@ -67,7 +69,9 @@ export function classifyAirlineValue(value: unknown): { kind: AirlineCodeKind; v
 }
 
 /** Airport codes: 3 letters → IATA, 4 alphanumerics → ICAO. */
-export function classifyAirportCode(value: unknown): { kind: 'iata' | 'icao'; value: string } | null {
+export function classifyAirportCode(
+  value: unknown,
+): { kind: 'iata' | 'icao'; value: string } | null {
   const s = cleanText(value)?.toUpperCase();
   if (!s) return null;
   if (/^[A-Z]{3}$/.test(s)) return { kind: 'iata', value: s };

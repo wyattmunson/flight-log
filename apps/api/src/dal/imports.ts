@@ -1,7 +1,7 @@
 /**
  * User-owned import batches. Every function takes `userId` first and scopes by it.
  */
-import { Prisma } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
 import type { ImportBatch, ImportRowError, ImportSummary } from '@flight-log/shared';
 import { prisma } from '../db';
 import type { PreparedFlight } from '../import/parseRow';
