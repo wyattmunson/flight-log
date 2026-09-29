@@ -22,6 +22,7 @@ const emptyStats = {
   airports: [],
   airlines: [],
   aircraftTypes: [],
+  aircraftFamilies: [],
   tails: [],
   perYear: [],
   perMonth: [],

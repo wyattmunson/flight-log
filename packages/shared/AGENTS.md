@@ -16,6 +16,7 @@ Code shared by the API, the web app and the tests. Root rules in [`/AGENTS.md`](
 | `distance.ts`  | `haversineMiles`, `roundMiles` (0.1 mi, the stored precision), mi/km conversion                                                                                                            |
 | `geo.ts`       | `greatCirclePoints` (**longitudes unwrapped** across ±180), `unwrapLongitudes`, `routeKey` (direction-independent)                                                                         |
 | `normalize.ts` | `normalizeFlightNumber` (carrier + numeric part, no leading zeros), `normalizeCategory` (Title Case), airline/airport code classification, `parseBoolean`, `normalizeTailNumber`           |
+| `aircraft.ts`  | `AIRCRAFT_FAMILIES` (ordered rules) and `classifyAircraftFamily(typeName)`. Pure; the API persists the result (`aircraft_families`)                                                        |
 | `time.ts`      | `parseFlightDate` (ISO first, then US-style), `parseFlightTime(value, zone)` (offset honored, else wall-clock in zone), `computeAirTimeMinutes`, `computeGateTimeMinutes`, display helpers |
 | `schemas.ts`   | Zod request schemas (flight input/patch, filters, list query, lookup, import commit), time-field ↔ airport-side map                                                                        |
 | `types.ts`     | API response types (list item vs detail, import preview/summary, map, stats, lookup, config)                                                                                               |

@@ -36,6 +36,7 @@ describe('POST /api/flights', () => {
       cabinClass: 'Business',
       seat: '8J',
       aircraftType: 'Boeing 777-200',
+      aircraftFamily: 'Boeing 777',
       airline: { iata: 'AA' },
       origin: { iata: 'JFK', timezone: 'America/New_York' },
     });

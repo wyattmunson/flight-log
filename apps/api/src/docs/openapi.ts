@@ -424,6 +424,10 @@ export const openApiSpec = {
         divertedTo: nullable(ref('AirportSummary')),
         canceled: bool,
         aircraftType: nstr,
+        aircraftFamily: {
+          ...nstr,
+          description: 'Marketing family computed from the aircraft type, e.g. "Boeing 777"',
+        },
         tailNumber: nstr,
         cabinClass: nstr,
         distanceMiles: num,
@@ -564,6 +568,7 @@ export const openApiSpec = {
         airlines: arrayOf(obj({ value: str, label: str, count: int })),
         cabins: arrayOf(obj({ value: str, count: int })),
       }),
+      NamedCount: obj({ label: str, flights: int, miles: num }),
       Stats: {
         type: 'object',
         description:
@@ -585,7 +590,8 @@ export const openApiSpec = {
           }),
           airports: arrayOf({ type: 'object' }),
           airlines: arrayOf({ type: 'object' }),
-          aircraftTypes: arrayOf({ type: 'object' }),
+          aircraftTypes: arrayOf(ref('NamedCount')),
+          aircraftFamilies: arrayOf(ref('NamedCount')),
           tails: arrayOf({ type: 'object' }),
           perYear: arrayOf({ type: 'object' }),
           perMonth: arrayOf({ type: 'object' }),

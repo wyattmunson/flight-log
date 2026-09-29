@@ -20,7 +20,7 @@ export const flightInclude = {
   origin: true,
   destination: true,
   divertedTo: true,
-  aircraftType: true,
+  aircraftType: { include: { aircraftFamily: true } },
 } satisfies Prisma.FlightInclude;
 
 export type FlightWithRelations = Prisma.FlightGetPayload<{ include: typeof flightInclude }>;
@@ -41,6 +41,7 @@ export function toListItem(f: FlightWithRelations): FlightListItem {
     divertedTo: f.divertedTo ? toAirportSummary(f.divertedTo) : null,
     canceled: f.canceled,
     aircraftType: f.aircraftType?.name ?? null,
+    aircraftFamily: f.aircraftType?.aircraftFamily?.name ?? null,
     tailNumber: f.tailNumber,
     cabinClass: f.cabinClass,
     distanceMiles: Number(f.distanceMiles),

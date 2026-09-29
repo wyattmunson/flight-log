@@ -161,6 +161,7 @@ export function FlightDetailView({
           value={[flight.arrTerminal, flight.arrGate].filter(Boolean).join(' / ')}
         />
         <Field label="Aircraft" value={flight.aircraftType} />
+        <Field label="Aircraft family" value={flight.aircraftFamily} />
         <Field label="Tail number" value={flight.tailNumber} />
         <Field label="Cabin" value={flight.cabinClass} />
         <Field label="Seat" value={[flight.seat, flight.seatType].filter(Boolean).join(' · ')} />

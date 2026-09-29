@@ -52,6 +52,7 @@ docker compose up -d db          # just Postgres
 npm install
 npm run db:migrate               # prisma migrate deploy (reads the root .env)
 npm run seed:reference           # airports + airlines + default user
+npm run seed:aircraft-families   # aircraft families + assign them to aircraft types (idempotent)
 npm run dev                      # api on :3001, web on :5173
 ```
 
@@ -63,6 +64,7 @@ npm run dev                      # api on :3001, web on :5173
 | `npm run lint` / `npm run typecheck`       | ESLint (flat config) / `tsc --noEmit` in every workspace                                  |
 | `npm run format` / `format:check`          | Prettier                                                                                  |
 | `npm run seed:reference`                   | Download (or read from `data/`) and insert reference data                                 |
+| `npm run seed:aircraft-families`           | Create aircraft family rows and assign a family to each aircraft type that has none       |
 | `docker compose exec -w /app api npm test` | Run the suite inside Docker                                                               |
 
 Set `FLIGHT_API_PROVIDER=stub` in `.env` to enable the demo **Look up flight** button (try `UA837` or `BA117`).

@@ -1,3 +1,4 @@
+export * from './aircraft';
 export * from './constants';
 export * from './distance';
 export * from './geo';

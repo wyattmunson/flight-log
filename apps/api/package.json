@@ -14,6 +14,7 @@
     "db:generate": "node scripts/prisma.mjs generate",
     "seed:reference": "tsx src/seed/cli.ts",
     "seed:reference:if-empty": "tsx src/seed/cli.ts --if-empty",
+    "seed:aircraft-families": "tsx src/seed/aircraftFamilies.ts",
     "prisma": "node scripts/prisma.mjs"
   },
   "prisma": {

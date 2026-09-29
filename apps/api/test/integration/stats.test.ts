@@ -63,6 +63,20 @@ describe('GET /api/stats (fixture)', () => {
       flights: 1,
     });
     expect(stats.aircraftTypes[0]).toMatchObject({ label: 'Boeing 787-9', flights: 3 });
+    // Hand-counted from the fixture's 12 flown flights (types grouped by family).
+    const families = Object.fromEntries(
+      stats.aircraftFamilies.map((f: { label: string; flights: number }) => [f.label, f.flights]),
+    );
+    expect(families).toEqual({
+      'Boeing 787': 3,
+      'Boeing 777': 2,
+      'Boeing 737': 2,
+      'Airbus A380': 2,
+      'Airbus A320': 1,
+      'Airbus A330': 1,
+      'Embraer E-Jet': 1,
+    });
+    expect(stats.aircraftFamilies[0]).toMatchObject({ label: 'Boeing 787', flights: 3 });
     expect(stats.tails[0]).toMatchObject({
       tailNumber: 'N24976',
       flights: 3,

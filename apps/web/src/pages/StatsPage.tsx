@@ -122,6 +122,7 @@ function Dashboard({ stats, unit }: { stats: Stats; unit: DistanceUnit }) {
     .map((a) => ({ ...a, label: a.iata ?? a.icao ?? a.name }));
   const airlinesTop = stats.airlines.slice(0, TOP_N);
   const aircraftTop = stats.aircraftTypes.slice(0, TOP_N);
+  const familiesTop = stats.aircraftFamilies.slice(0, TOP_N);
   const unitMiles = <R extends { miles: number }>(rows: R[]) =>
     rows.map((r) => ({ ...r, distance: Math.round(convertMiles(r.miles, unit)) }));
 
@@ -430,6 +431,32 @@ function Dashboard({ stats, unit }: { stats: Stats; unit: DistanceUnit }) {
           }
         >
           <HBarChart data={aircraftTop} labelKey="label" valueKey="flights" valueLabel="flights" />
+        </ChartCard>
+        <ChartCard
+          title="Aircraft families"
+          subtitle="Types grouped by family, e.g. all 777 variants"
+          empty={familiesTop.length === 0}
+          table={
+            <SortableTable
+              caption="Flights per aircraft family"
+              rows={stats.aircraftFamilies}
+              rowKey={(r) => r.label}
+              initialSort={{ key: 'flights', dir: 'desc' }}
+              columns={[
+                { key: 'label', label: 'Family', value: (r) => r.label },
+                { key: 'flights', label: 'Flights', value: (r) => r.flights, numeric: true },
+                {
+                  key: 'miles',
+                  label: unit,
+                  value: (r) => r.miles,
+                  numeric: true,
+                  render: (r) => formatInt(convertMiles(r.miles, unit)),
+                },
+              ]}
+            />
+          }
+        >
+          <HBarChart data={familiesTop} labelKey="label" valueKey="flights" valueLabel="flights" />
         </ChartCard>
         <ChartCard
           title="Most-flown tails"

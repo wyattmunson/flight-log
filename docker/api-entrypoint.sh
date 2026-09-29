@@ -8,5 +8,7 @@ npx prisma generate >/dev/null
 npx prisma migrate deploy
 # Seeds the default user always, and reference data only when the tables are empty.
 npm run --silent seed:reference:if-empty
+# Idempotent: creates family rows and assigns a family to any aircraft type without one.
+npm run --silent seed:aircraft-families
 
 exec npm run dev

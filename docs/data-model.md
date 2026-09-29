@@ -12,6 +12,7 @@ erDiagram
   airports ||--o{ flights : "destination"
   airports |o--o{ flights : "diverted_to"
   airlines |o--o{ flights : "airline (nullable)"
+  aircraft_families |o--o{ aircraft_types : "family (nullable)"
   aircraft_types |o--o{ flights : "aircraft (nullable)"
 
   users {
@@ -51,6 +52,12 @@ erDiagram
     text name UK
     text icao_code
     text flighty_id UK
+    int aircraft_family_id FK
+  }
+  aircraft_families {
+    int id PK
+    text name UK
+    text manufacturer
   }
   flights {
     uuid id PK
@@ -128,7 +135,7 @@ every function there takes `userId` first and filters by it. Raw-SQL aggregates 
 their `WHERE` from `filtersSql(userId, …)`. `req.userId` is set by a single middleware
 (`apps/api/src/http/resolveUser.ts`), which returns the seeded default user in Phase 1.
 
-Reference tables (`airports`, `airlines`, `aircraft_types`, `flight_lookup_cache`) are global.
+Reference tables (`airports`, `airlines`, `aircraft_types`, `aircraft_families`, `flight_lookup_cache`) are global.
 
 ## Dedupe
 
@@ -156,6 +163,14 @@ and commit are skipped rather than failing the batch. A manual create that hits 
   else NULL. Negative or > 30 h results are treated as NULL.
 - `gate_time_minutes`: `gate_departure_actual → gate_arrival_actual`, else the scheduled gate pair,
   else NULL (same bounds; `computeGateTimeMinutes`). The migration backfilled existing rows.
+- `aircraft_types.aircraft_family_id`: **computed**, since no data source provides it.
+  `classifyAircraftFamily()` (`packages/shared/src/aircraft.ts`) applies ordered rules to the type
+  name and yields a marketing family such as "Boeing 777" (all 777 variants), "Boeing 737" (Classic,
+  NG and MAX) or "Airbus A320" (A318–A321, ceo and neo). A type no rule matches keeps a NULL family
+  and shows as "Unknown" in stats. Families are assigned when a type is first created (import or
+  manual entry) and by `npm run seed:aircraft-families` (also run on every `docker compose up`),
+  which creates the family rows and fills in any type without one. It never overwrites an existing
+  assignment, so a manual correction sticks; after changing a rule, null the affected rows and re-run it.
 - Times are stored as UTC `timestamptz`. Naive local inputs (CSV cells or form fields without an
   offset) are interpreted in the relevant airport's IANA zone:
 

@@ -33,6 +33,7 @@ const flight: FlightDetail = {
   distanceMiles: 7494.4,
   airTimeMinutes: 900,
   gateTimeMinutes: null,
+  aircraftFamily: null,
   gateDepartureScheduled: null,
   gateDepartureActual: null,
   takeoffScheduled: '2024-07-02T05:30:00.000Z',

@@ -79,12 +79,27 @@ model Airline {
   @@map("airlines")
 }
 
+/// Marketing family of an aircraft type (e.g. "Boeing 777"). Rows come from AIRCRAFT_FAMILIES in
+/// packages/shared; the family of a type is computed from its name (no data source provides it).
+model AircraftFamily {
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
+  manufacturer  String
+  aircraftTypes AircraftType[]
+
+  @@map("aircraft_families")
+}
+
 model AircraftType {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  icaoCode  String?  @map("icao_code")
-  flightyId String?  @unique @map("flighty_id")
-  flights   Flight[]
+  id               Int             @id @default(autoincrement())
+  name             String          @unique
+  icaoCode         String?         @map("icao_code")
+  flightyId        String?         @unique @map("flighty_id")
+  aircraftFamilyId Int?            @map("aircraft_family_id")
+  aircraftFamily   AircraftFamily? @relation(fields: [aircraftFamilyId], references: [id])
+  flights          Flight[]
+
+  @@index([aircraftFamilyId])
 
   @@map("aircraft_types")
 }

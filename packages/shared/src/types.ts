@@ -49,6 +49,7 @@ export interface FlightListItem extends FlightTimes {
   divertedTo: AirportSummary | null;
   canceled: boolean;
   aircraftType: string | null;
+  aircraftFamily: string | null;
   tailNumber: string | null;
   cabinClass: string | null;
   distanceMiles: number;
@@ -227,6 +228,8 @@ export interface Stats {
   airports: StatsAirportRow[];
   airlines: (NamedCount & { airlineId: number | null })[];
   aircraftTypes: NamedCount[];
+  /** Flights per aircraft family; flights whose type has no family are labeled "Unknown". */
+  aircraftFamilies: NamedCount[];
   tails: { tailNumber: string; flights: number; aircraftTypes: string[]; airlines: string[] }[];
   perYear: { year: number; flights: number; miles: number }[];
   perMonth: { month: string; flights: number; miles: number }[];

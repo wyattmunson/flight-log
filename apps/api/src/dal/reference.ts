@@ -2,6 +2,7 @@
  * Global reference data (airports, airlines, aircraft types). Not user-owned.
  */
 import { Prisma, type Airline, type Airport } from '@prisma/client';
+import { AIRCRAFT_FAMILIES, classifyAircraftFamily } from '@flight-log/shared';
 import { prisma } from '../db';
 
 /** Matches whole-word prefixes ("fran" → "San Francisco"), not arbitrary substrings. */
@@ -80,6 +81,50 @@ export function getAirline(id: number) {
   return prisma.airline.findUnique({ where: { id } });
 }
 
+/** Id of the family for an aircraft type name (creating the family row if needed), or null. */
+async function aircraftFamilyIdFor(
+  typeName: string,
+  tx: Prisma.TransactionClient,
+): Promise<number | null> {
+  const name = classifyAircraftFamily(typeName);
+  const def = name ? AIRCRAFT_FAMILIES.find((f) => f.name === name) : undefined;
+  if (!def) return null;
+  const family = await tx.aircraftFamily.upsert({
+    where: { name: def.name },
+    update: {},
+    create: { name: def.name, manufacturer: def.manufacturer },
+  });
+  return family.id;
+}
+
+/**
+ * Ensure every known family has a row and assign a family to each aircraft type that has none.
+ * Idempotent. Types no rule matches stay null. Never overwrites an existing assignment.
+ */
+export async function syncAircraftFamilies(
+  tx: Prisma.TransactionClient = prisma,
+): Promise<{ families: number; assigned: number; unmatched: string[] }> {
+  await tx.aircraftFamily.createMany({
+    data: AIRCRAFT_FAMILIES.map((f) => ({ name: f.name, manufacturer: f.manufacturer })),
+    skipDuplicates: true,
+  });
+  const familyIds = new Map((await tx.aircraftFamily.findMany()).map((f) => [f.name, f.id]));
+  const types = await tx.aircraftType.findMany({ where: { aircraftFamilyId: null } });
+  let assigned = 0;
+  const unmatched: string[] = [];
+  for (const t of types) {
+    const family = classifyAircraftFamily(t.name);
+    const id = family ? familyIds.get(family) : undefined;
+    if (id === undefined) {
+      unmatched.push(t.name);
+      continue;
+    }
+    await tx.aircraftType.update({ where: { id: t.id }, data: { aircraftFamilyId: id } });
+    assigned++;
+  }
+  return { families: familyIds.size, assigned, unmatched };
+}
+
 /** Find or create an aircraft type by Flighty ID first, then by name. */
 export async function upsertAircraftType(
   name: string,
@@ -97,7 +142,9 @@ export async function upsertAircraftType(
     }
     return existing.id;
   }
-  const created = await tx.aircraftType.create({ data: { name, flightyId } });
+  const created = await tx.aircraftType.create({
+    data: { name, flightyId, aircraftFamilyId: await aircraftFamilyIdFor(name, tx) },
+  });
   return created.id;
 }
 

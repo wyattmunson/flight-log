@@ -75,6 +75,7 @@ export async function computeStats(userId: string, filters: FlightFilters): Prom
     airports,
     airlines,
     aircraftTypes,
+    aircraftFamilies,
     tails,
     perYear,
     perMonth,
@@ -120,6 +121,14 @@ export async function computeStats(userId: string, filters: FlightFilters): Prom
       SELECT COALESCE(t.name, 'Unknown') AS label, count(*) AS flights,
              COALESCE(sum(f.distance_miles), 0) AS miles
       FROM flown f LEFT JOIN aircraft_types t ON t.id = f.aircraft_type_id
+      GROUP BY 1
+      ORDER BY flights DESC, miles DESC, label`,
+    prisma.$queryRaw<Record<string, unknown>[]>`${base}
+      SELECT COALESCE(af.name, 'Unknown') AS label, count(*) AS flights,
+             COALESCE(sum(f.distance_miles), 0) AS miles
+      FROM flown f
+      LEFT JOIN aircraft_types t ON t.id = f.aircraft_type_id
+      LEFT JOIN aircraft_families af ON af.id = t.aircraft_family_id
       GROUP BY 1
       ORDER BY flights DESC, miles DESC, label`,
     prisma.$queryRaw<Record<string, unknown>[]>`${base}
@@ -228,6 +237,11 @@ export async function computeStats(userId: string, filters: FlightFilters): Prom
       miles: round1(num(r.miles)),
     })),
     aircraftTypes: aircraftTypes.map((r) => ({
+      label: r.label as string,
+      flights: num(r.flights),
+      miles: round1(num(r.miles)),
+    })),
+    aircraftFamilies: aircraftFamilies.map((r) => ({
       label: r.label as string,
       flights: num(r.flights),
       miles: round1(num(r.miles)),
