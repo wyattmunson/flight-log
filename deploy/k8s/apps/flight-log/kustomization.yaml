@@ -1,6 +1,5 @@
 # The flight-log app. Requires (created by deploy/scripts/create-secrets.sh):
-#   secret flight-log-db          (DATABASE_URL)
-#   secret flight-log-basic-auth  (Traefik htpasswd, key "users")
+#   secret flight-log-db  (DATABASE_URL)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: flight-log
@@ -16,8 +15,12 @@ configMapGenerator:
       - MAX_UPLOAD_MB=10
       - IMPORT_PREVIEW_TTL_MINUTES=30
       - MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty
-      # Swagger UI is off on the public host; set to "true" to enable it (still behind basic auth).
+      # Swagger UI is off on the public host; set to "true" to enable it (it still needs a login).
       - ENABLE_API_DOCS=false
+      # Email + password login with database sessions. Create the first user BEFORE applying this
+      # (deploy/README.md → "Enabling login"); NODE_ENV=production makes the cookie Secure and
+      # trusts one proxy hop (Traefik).
+      - AUTH_REQUIRED=true
 # Images are built by .github/workflows/images.yml. Pin newTag to a sha-<commit> tag to roll back.
 images:
   - name: flight-log-api

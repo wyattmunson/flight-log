@@ -1,14 +1,14 @@
 # Deploying to a Lightsail VM (k3s + CloudNativePG)
 
 Target: **https://flights.wyattmunson.com** on one Lightsail instance running single-node k3s,
-with a shared CloudNativePG Postgres, fronted by k3s's bundled Traefik (Let's Encrypt TLS, HTTP
-basic auth). Sizing and cost rationale are in the conversation history; short version: a 2 GB
+with a shared CloudNativePG Postgres, fronted by k3s's bundled Traefik (Let's Encrypt TLS). The
+app authenticates users itself (email + password, database sessions). Sizing and cost rationale are in the conversation history; short version: a 2 GB
 instance (~$12/mo) fits this, 4 GB is the comfortable size for more apps.
 
 ```
 Internet ─► DNS A record ─► Lightsail static IP :80/:443
                               └─ k3s (single node)
-                                  ├─ kube-system:   Traefik  (TLS, redirect, basic auth)
+                                  ├─ kube-system:   Traefik  (TLS, redirect)
                                   ├─ flight-log:    web (nginx, static SPA)  api (Express)
                                   ├─ databases:     platform-pg (CloudNativePG, 1 instance)
                                   └─ cnpg-system:   CloudNativePG operator
@@ -20,15 +20,15 @@ expect to iterate on the first real apply.
 
 ## Layout
 
-| Path                              | What                                                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `docker/`                         | Production `api` / `web` Dockerfiles, API entrypoint (migrate → seed → serve), nginx config                        |
-| `bootstrap/install-k3s.sh`        | One-time node setup: optional data-disk mount, unattended upgrades, k3s install                                    |
-| `scripts/create-secrets.sh`       | Creates the DB password, `DATABASE_URL` and basic-auth secrets (idempotent, never rotates an existing DB password) |
-| `k8s/platform/cnpg-operator/`     | Pinned CloudNativePG operator (v1.30.1)                                                                            |
-| `k8s/platform/`                   | Traefik ACME config + the shared `platform-pg` Postgres cluster and per-app roles/databases                        |
-| `k8s/apps/flight-log/`            | Namespace, api + web Deployments/Services, Traefik middlewares and routes                                          |
-| `../.github/workflows/images.yml` | Builds and pushes `ghcr.io/wyattmunson/flight-log-{api,web}` on every push to `main`                               |
+| Path                              | What                                                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `docker/`                         | Production `api` / `web` Dockerfiles, API entrypoint (migrate → seed → serve), nginx config            |
+| `bootstrap/install-k3s.sh`        | One-time node setup: optional data-disk mount, unattended upgrades, k3s install                        |
+| `scripts/create-secrets.sh`       | Creates the DB password and `DATABASE_URL` secrets (idempotent, never rotates an existing DB password) |
+| `k8s/platform/cnpg-operator/`     | Pinned CloudNativePG operator (v1.30.1)                                                                |
+| `k8s/platform/`                   | Traefik ACME config + the shared `platform-pg` Postgres cluster and per-app roles/databases            |
+| `k8s/apps/flight-log/`            | Namespace, api + web Deployments/Services, Traefik middlewares and routes                              |
+| `../.github/workflows/images.yml` | Builds and pushes `ghcr.io/wyattmunson/flight-log-{api,web}` on every push to `main`                   |
 
 ## One-time setup
 
@@ -76,7 +76,7 @@ kubectl get nodes
 kubectl apply --server-side -k deploy/k8s/platform/cnpg-operator
 kubectl -n cnpg-system rollout status deploy/cnpg-controller-manager
 
-deploy/scripts/create-secrets.sh <basic-auth-username>     # prompts for the password
+deploy/scripts/create-secrets.sh
 
 kubectl apply -k deploy/k8s/platform                       # Traefik config + platform-pg
 kubectl -n databases wait --for=condition=Ready cluster/platform-pg --timeout=300s
@@ -84,9 +84,80 @@ kubectl apply -k deploy/k8s/apps/flight-log
 kubectl -n flight-log rollout status deploy/api            # first boot seeds ~12k airports (needs internet)
 ```
 
-Then open https://flights.wyattmunson.com and sign in with the basic-auth credentials. The first
-request triggers the certificate; if it doesn't arrive, check `kubectl -n kube-system logs deploy/traefik`.
+Now create your login (the API seeded the default user on first boot; this gives it your email and
+password, and keeps any flights it already owns). It prompts for the password twice without echo:
+
+```bash
+kubectl -n flight-log exec -it deploy/api -- sh -c 'cd apps/api && npm run user:create -- --adopt-default --email you@example.com --name Wyatt'
+```
+
+Then open https://flights.wyattmunson.com and sign in. The first request triggers the certificate;
+if it doesn't arrive, check `kubectl -n kube-system logs deploy/traefik`.
 Use the staging CA line in `traefik-config.yaml` while debugging to avoid rate limits.
+
+## Enabling login on an existing deployment (replaces basic auth)
+
+The site used to be gated by a Traefik basic-auth middleware. The app now has its own login
+(`AUTH_REQUIRED=true`). The order below cannot lock you out: at every step either basic auth still
+guards the site, or your account already exists and you have confirmed it works. Nothing is deleted
+until the last step.
+
+1. **Merge, then let the images workflow build** (`.github/workflows/images.yml`). Wait for it to go green.
+2. **Roll the new images out while the old manifests are still applied.** `AUTH_REQUIRED` is unset,
+   which means off, so the app behaves as before and basic auth still guards the site. The API runs
+   the migration (adds `users.password_hash` and `sessions`) on start.
+
+   ```bash
+   kubectl -n flight-log rollout restart deploy/api deploy/web
+   kubectl -n flight-log rollout status deploy/api
+   ```
+
+3. **Create your user** on the seeded default user, so your existing flights stay yours. It prompts
+   for the password twice without echo (12 to 128 characters). Use a one-word `--name`, or nest the
+   quotes carefully, because the command sits inside single quotes. Add `--force` only to replace an
+   existing password.
+
+   ```bash
+   kubectl -n flight-log exec -it deploy/api -- sh -c 'cd apps/api && npm run user:create -- --adopt-default --email you@example.com --name Wyatt'
+   ```
+
+4. **Apply the new manifests** (`AUTH_REQUIRED=true`, no basic-auth middleware). The changed ConfigMap
+   restarts the API; Traefik stops asking for basic auth.
+
+   ```bash
+   kubectl apply -k deploy/k8s/apps/flight-log
+   kubectl -n flight-log rollout status deploy/api
+   ```
+
+5. **Confirm before deleting anything.** Without a session the API must answer 401, health stays
+   public, and login must work in the browser (sign in, reload, sign out).
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://flights.wyattmunson.com/api/health    # 200
+   curl -s -i https://flights.wyattmunson.com/api/flights | head -1                        # 401
+   ```
+
+6. **Only now remove the old pieces.** `kubectl apply` does not delete objects that were dropped from
+   the manifests, so remove the middleware yourself, then the secret:
+
+   ```bash
+   kubectl -n flight-log delete middleware basic-auth
+   kubectl -n flight-log delete secret flight-log-basic-auth
+   ```
+
+**Rolling back** before step 6: check out the previous `deploy/k8s/apps/flight-log` and
+`kubectl apply -k` it. Basic auth returns and `AUTH_REQUIRED` goes back to unset. The secret is still
+there, so nothing else is needed.
+
+**Account management** (same `kubectl exec` pattern, in `apps/api`):
+
+```bash
+kubectl -n flight-log exec -it deploy/api -- sh -c 'cd apps/api && npm run user:create -- --email other@example.com --name Other'
+kubectl -n flight-log exec -it deploy/api -- sh -c 'cd apps/api && npm run user:set-password -- --email you@example.com'   # also signs that user out everywhere
+```
+
+There is no signup or password-reset page. Locked out of the app? `user:set-password` through kubectl
+is the recovery path. Signed-in users can change their password from the user menu.
 
 ## Day to day
 
@@ -107,7 +178,8 @@ Migrations run automatically on every API start (`prisma migrate deploy`).
 ## Adding another app to the node
 
 1. New namespace + Deployment/Service/IngressRoute under `k8s/apps/<app>/` (copy `flight-log`).
-   Point its DNS name at the same IP; add its own basic-auth (or real auth) middleware.
+   Point its DNS name at the same IP; give it its own auth (the app's own login, or a Traefik
+   `basicAuth` middleware and secret).
 2. If it needs Postgres: add a credentials secret in `databases`, a role in
    `k8s/platform/postgres/cluster.yaml`, and a `Database` in `postgres/databases/`. Its
    `DATABASE_URL` host is `platform-pg-rw.databases.svc.cluster.local`.
@@ -122,13 +194,16 @@ Migrations run automatically on every API start (`prisma migrate deploy`).
   dump: `kubectl -n databases exec platform-pg-1 -c postgres -- pg_dump -Fc flightlog > flightlog.dump`.
 - **Import previews are in memory** (AGENTS.md), so the API is pinned to 1 replica with the
   `Recreate` strategy; a deploy drops any pending import preview.
-- **Auth is a stopgap.** The app has no accounts; basic auth is the only gate. Swagger UI is off
-  (`ENABLE_API_DOCS=false` in the kustomization).
+- **Auth is the app's own login** (`AUTH_REQUIRED=true`). Sessions and throttling live in the API
+  process and database (login attempts are throttled in memory per API process, which matches the
+  single replica). Swagger UI is off (`ENABLE_API_DOCS=false` in the kustomization) and, when on,
+  needs a login too. Cookies are `Secure` and the API trusts one proxy hop (Traefik) because the
+  image runs with `NODE_ENV=production`.
 - **First boot needs outbound internet** to download OurAirports/OpenFlights data. If that fails the
   pod crash-loops with a clear message; it retries on restart.
 - **Reference data license:** the deployed DB contains OurAirports (public domain) and OpenFlights
   (ODbL) data; see the README's license notes.
-- **Rotating basic-auth credentials:** re-run `create-secrets.sh` (the DB password is kept).
+- **Changing your password:** the user menu in the app, or `npm run user:set-password` (above).
 - **Rotating the DB password:** delete the `flight-log-db-credentials` and `flight-log-db` secrets,
   re-run `create-secrets.sh`, then `kubectl -n flight-log rollout restart deploy/api`.
 

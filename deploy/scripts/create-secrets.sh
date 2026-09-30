@@ -3,18 +3,9 @@
 # re-running never rotates it. Run against the cluster (kubectl context) BEFORE applying
 # deploy/k8s/platform and deploy/k8s/apps/flight-log.
 #
-#   deploy/scripts/create-secrets.sh <basic-auth-username>
-# The basic-auth password is read from the terminal, or from BASIC_AUTH_PASSWORD if set.
+#   deploy/scripts/create-secrets.sh
+# App logins are not secrets in the cluster: create them with the user:create CLI (deploy/README.md).
 set -euo pipefail
-
-user="${1:?usage: create-secrets.sh <basic-auth-username>}"
-if [ -n "${BASIC_AUTH_PASSWORD:-}" ]; then
-  pass="$BASIC_AUTH_PASSWORD"
-else
-  read -r -s -p "Basic-auth password for '$user': " pass
-  echo
-fi
-[ -n "$pass" ] || { echo "empty password" >&2; exit 1; }
 
 apply() { kubectl apply -f -; }
 
@@ -39,12 +30,6 @@ kubectl -n databases create secret generic flight-log-db-credentials \
 url="postgresql://flight_log:${db_pass}@platform-pg-rw.databases.svc.cluster.local:5432/flightlog"
 kubectl -n flight-log create secret generic flight-log-db \
   --from-literal=DATABASE_URL="$url" \
-  --dry-run=client -o yaml | apply
-
-# Read by the Traefik basicAuth middleware (htpasswd format, key "users").
-hash=$(printf '%s' "$pass" | openssl passwd -apr1 -stdin)
-kubectl -n flight-log create secret generic flight-log-basic-auth \
-  --from-literal=users="${user}:${hash}" \
   --dry-run=client -o yaml | apply
 
 echo "Secrets applied."

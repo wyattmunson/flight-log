@@ -1,14 +1,6 @@
 # Traefik routing for flights.wyattmunson.com (the bundled k3s Traefik).
-# The app has no login of its own, so every request goes through HTTP basic auth.
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: basic-auth
-spec:
-  basicAuth:
-    secret: flight-log-basic-auth
-    removeHeader: true
----
+# The app authenticates users itself (AUTH_REQUIRED=true: email + password, DB sessions), so there
+# is no Traefik auth middleware; /api/health and /api/auth/login are the only unauthenticated routes.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -43,15 +35,11 @@ spec:
     # /api is the longer rule, so Traefik matches it before the catch-all below.
     - kind: Rule
       match: Host(`flights.wyattmunson.com`) && PathPrefix(`/api`)
-      middlewares:
-        - name: basic-auth
       services:
         - name: api
           port: 3000
     - kind: Rule
       match: Host(`flights.wyattmunson.com`)
-      middlewares:
-        - name: basic-auth
       services:
         - name: web
           port: 80
