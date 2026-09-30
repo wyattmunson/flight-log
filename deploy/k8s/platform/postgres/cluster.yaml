@@ -1,0 +1,39 @@
+# One shared Postgres for every app on this node. Each app gets its own role (below) and its own
+# database (databases/<app>.yaml), so apps can't read each other's data.
+#
+# Adding an app: (1) create its credentials secret in this namespace, (2) add a role here,
+# (3) add a Database resource, (4) give the app a DATABASE_URL pointing at
+# platform-pg-rw.databases.svc.cluster.local.
+#
+# Backups aren't configured yet. When ready, add `backup.barmanObjectStore` here plus a
+# ScheduledBackup (see https://cloudnative-pg.io/documentation/current/backup/).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: platform-pg
+  namespace: databases
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  enableSuperuserAccess: false
+  storage:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  postgresql:
+    parameters:
+      # Sized for a 2 GB node shared with k3s and the apps.
+      max_connections: '50'
+      shared_buffers: 128MB
+      effective_cache_size: 384MB
+  managed:
+    roles:
+      - name: flight_log
+        ensure: present
+        login: true
+        passwordSecret:
+          name: flight-log-db-credentials

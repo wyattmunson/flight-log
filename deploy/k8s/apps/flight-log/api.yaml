@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels: { app.kubernetes.io/name: flight-log, app.kubernetes.io/component: api }
+spec:
+  # One replica, and Recreate so two pods never overlap: import previews live in this process's
+  # memory (see AGENTS.md), and the node is small.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app.kubernetes.io/name: flight-log, app.kubernetes.io/component: api }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: flight-log, app.kubernetes.io/component: api }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: api
+          image: flight-log-api
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef: { name: flight-log-api }
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: flight-log-db, key: DATABASE_URL }
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          # First boot runs migrations and downloads/inserts reference data, which takes a while.
+          startupProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels: { app.kubernetes.io/name: flight-log, app.kubernetes.io/component: api }
+spec:
+  selector: { app.kubernetes.io/name: flight-log, app.kubernetes.io/component: api }
+  ports:
+    - { name: http, port: 3000, targetPort: http }

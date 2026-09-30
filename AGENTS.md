@@ -13,13 +13,14 @@ flight lookups) has a provider seam but no real provider yet. See README → Roa
 
 TypeScript npm-workspaces monorepo:
 
-| Path                            | Role                                                                                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared`               | Zod schemas, API response types, pure helpers (distance, great circle, normalization, time). Consumed as **TS source**, with no build step. |
-| `apps/api`                      | Express 4 + Prisma 6 on Postgres 16, run with `tsx`. Layers: `routes → services/import → dal → prisma`.                                     |
-| `apps/web`                      | Vite 5 + React 18 + React Router 7 + TanStack Query 5 + Tailwind 3 + Recharts 2 + maplibre-gl 6.                                            |
-| `docs/`                         | `data-model.md` (ERD, dedupe, derived values), `flight-data-api-analysis.md` (Phase 2 research).                                            |
-| `docker/`, `docker-compose.yml` | Dev stack: `db`, `api` (migrate → seed-if-empty → `tsx watch`), `web` (Vite, proxies `/api`).                                               |
+| Path                            | Role                                                                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/shared`               | Zod schemas, API response types, pure helpers (distance, great circle, normalization, time). Consumed as **TS source**, with no build step.                  |
+| `apps/api`                      | Express 4 + Prisma 6 on Postgres 16, run with `tsx`. Layers: `routes → services/import → dal → prisma`.                                                      |
+| `apps/web`                      | Vite 5 + React 18 + React Router 7 + TanStack Query 5 + Tailwind 3 + Recharts 2 + maplibre-gl 6.                                                             |
+| `docs/`                         | `data-model.md` (ERD, dedupe, derived values), `flight-data-api-analysis.md` (Phase 2 research).                                                             |
+| `docker/`, `docker-compose.yml` | Dev stack: `db`, `api` (migrate → seed-if-empty → `tsx watch`), `web` (Vite, proxies `/api`).                                                                |
+| `deploy/`                       | Production deploy to a single Lightsail k3s node: prod Dockerfiles, Kustomize manifests (CloudNativePG, Traefik), bootstrap scripts. See `deploy/README.md`. |
 
 ## Commands
 

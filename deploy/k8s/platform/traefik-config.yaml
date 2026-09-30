@@ -1,0 +1,32 @@
+# k3s bundles Traefik and lets you override its Helm values with a HelmChartConfig.
+# This enables Let's Encrypt (HTTP-01) with certificates persisted across restarts.
+# Set the email before applying. While testing, uncomment the staging caServer line to avoid
+# Let's Encrypt rate limits, then remove it (and delete /data/acme.json) for real certificates.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - --certificatesresolvers.letsencrypt.acme.email=munsonwf@gmail.com
+      - --certificatesresolvers.letsencrypt.acme.storage=/data/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      # - --certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+    persistence:
+      enabled: true
+      path: /data
+      size: 128Mi
+    deployment:
+      initContainers:
+        # The local-path volume is root-owned; Traefik runs as 65532 and needs a 0600 acme.json.
+        - name: volume-permissions
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - touch /data/acme.json && chmod 600 /data/acme.json && chown -R 65532:65532 /data
+          volumeMounts:
+            - name: data
+              mountPath: /data

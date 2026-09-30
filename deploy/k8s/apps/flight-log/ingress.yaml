@@ -1,0 +1,59 @@
+# Traefik routing for flights.wyattmunson.com (the bundled k3s Traefik).
+# The app has no login of its own, so every request goes through HTTP basic auth.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: basic-auth
+spec:
+  basicAuth:
+    secret: flight-log-basic-auth
+    removeHeader: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: flight-log-http
+spec:
+  entryPoints: [web]
+  routes:
+    - kind: Rule
+      match: Host(`flights.wyattmunson.com`)
+      middlewares:
+        - name: redirect-https
+      services:
+        - name: web
+          port: 80
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: flight-log
+spec:
+  entryPoints: [websecure]
+  routes:
+    # /api is the longer rule, so Traefik matches it before the catch-all below.
+    - kind: Rule
+      match: Host(`flights.wyattmunson.com`) && PathPrefix(`/api`)
+      middlewares:
+        - name: basic-auth
+      services:
+        - name: api
+          port: 3000
+    - kind: Rule
+      match: Host(`flights.wyattmunson.com`)
+      middlewares:
+        - name: basic-auth
+      services:
+        - name: web
+          port: 80
+  tls:
+    certResolver: letsencrypt

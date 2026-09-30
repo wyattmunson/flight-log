@@ -85,6 +85,7 @@ apps/web          Vite + React 18 + React Router + TanStack Query + Tailwind + R
 packages/shared   Zod schemas, API types, haversine, great-circle points, normalization, Luxon time helpers
 docs/             data-model.md (ERD), flight-data-api-analysis.md
 docker/           dev image, api entrypoint (migrate → seed-if-empty → dev), test-DB init
+deploy/           production deploy (Lightsail + k3s + CloudNativePG): Dockerfiles, k8s manifests, scripts
 ```
 
 API request path: `requestLog → express.json → resolveUser → router (Zod-validated) → service / import →
