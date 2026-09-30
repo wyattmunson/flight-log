@@ -207,6 +207,20 @@ describe('RequireAuth', () => {
   });
 });
 
+describe('session lost while signed in', () => {
+  it('lands on the login form (no redirect loop) and keeps the path', async () => {
+    let signedIn = true;
+    mockApi(() => (signedIn ? { status: 200, body: me(true) } : error(401, 'unauthenticated')));
+    const client = renderAt('/stats', app);
+    await screen.findByText('Secret app');
+
+    signedIn = false; // e.g. the session expired or was revoked in another tab
+    await client.invalidateQueries({ queryKey: ME_KEY });
+    expect(await screen.findByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByTestId('where')).toHaveTextContent('/login?next=%2Fstats');
+  });
+});
+
 describe('handleUnauthorized', () => {
   it('re-checks the session on a 401 from a data request, but not from /auth/*', async () => {
     const client = new QueryClient();

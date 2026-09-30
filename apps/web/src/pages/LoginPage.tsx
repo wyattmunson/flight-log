@@ -28,7 +28,9 @@ export function LoginPage() {
 
   // Already signed in (or auth is off): nothing to do here. This is also where a successful login
   // lands, since useLogin puts the user into the cache.
-  if (me.data) return <Navigate to={me.data.authRequired ? next : '/'} replace />;
+  // `status`, not `data`: after a failed re-check TanStack Query keeps the last good `data` next to
+  // the error, and treating that as "signed in" bounces between here and the route guard forever.
+  if (me.status === 'success') return <Navigate to={me.data.authRequired ? next : '/'} replace />;
   if (me.isPending) return <Spinner label="Checking your session…" />;
 
   const submit = (e: FormEvent) => {
