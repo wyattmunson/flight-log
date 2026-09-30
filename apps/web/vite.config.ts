@@ -14,7 +14,9 @@ export default defineConfig(({ mode }) => {
     worker: { format: 'es' },
     server: {
       port: Number(env.WEB_PORT) || 5173,
-      proxy: { '/api': { target, changeOrigin: true } },
+      // changeOrigin stays off: the API's CSRF guard compares Origin with the Host it receives, so the
+      // browser's Host (localhost:5173) must reach it unchanged.
+      proxy: { '/api': { target, changeOrigin: false } },
       watch: env.VITE_USE_POLLING === 'true' ? { usePolling: true, interval: 300 } : undefined,
     },
     test: {

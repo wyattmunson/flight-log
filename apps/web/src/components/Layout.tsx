@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useConfig } from '../api/hooks';
+import { UserMenu } from './UserMenu';
 
 const NAV = [
   { to: '/', label: 'Map', end: true },
@@ -45,6 +46,7 @@ export function Layout() {
               </NavLink>
             ))}
           </nav>
+          <UserMenu />
         </div>
       </header>
       <main

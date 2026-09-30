@@ -3,6 +3,8 @@ import type {
   AirlineSummary,
   AirportSummary,
   AppConfig,
+  AuthMe,
+  ChangePasswordInput,
   FilterOptions,
   FlightDetail,
   FlightFilters,
@@ -12,6 +14,7 @@ import type {
   ImportBatch,
   ImportPreview,
   ImportSummary,
+  LoginInput,
   LookupResponse,
   MapData,
   Paginated,
@@ -19,6 +22,43 @@ import type {
   Stats,
 } from '@flight-log/shared';
 import { apiFetch } from './client';
+
+export const ME_KEY = ['me'] as const;
+
+/** The signed-in user, or (with AUTH_REQUIRED off) the default user with `authRequired: false`. */
+export const useMe = () =>
+  useQuery({
+    queryKey: ME_KEY,
+    queryFn: () => apiFetch<AuthMe>('/auth/me'),
+    staleTime: 5 * 60_000,
+  });
+
+/** Login and logout swap the acting user, so nothing cached for the previous one may survive. */
+export function useLogin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LoginInput) =>
+      apiFetch<AuthMe>('/auth/login', { method: 'POST', json: input }),
+    onSuccess: (me) => {
+      queryClient.clear();
+      queryClient.setQueryData(ME_KEY, me);
+    },
+  });
+}
+
+export function useLogout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<void>('/auth/logout', { method: 'POST' }),
+    onSettled: () => queryClient.clear(),
+  });
+}
+
+export const useChangePassword = () =>
+  useMutation({
+    mutationFn: (input: ChangePasswordInput) =>
+      apiFetch<void>('/auth/password', { method: 'POST', json: input }),
+  });
 
 export const useConfig = () =>
   useQuery({

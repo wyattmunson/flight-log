@@ -6,6 +6,8 @@ export class ApiError extends Error {
     public code: string,
     message: string,
     public details?: unknown,
+    /** Extra response context: the API path (without `/api`) and the `Retry-After` seconds, if any. */
+    public meta: { path?: string; retryAfter?: number } = {},
   ) {
     super(message);
   }
@@ -52,6 +54,7 @@ export async function apiFetch<T>(
       err?.code ?? 'http_error',
       err?.message ?? `Request failed (${res.status})`,
       err?.details,
+      { path, retryAfter: Number(res.headers.get('retry-after')) || undefined },
     );
   }
   return body as T;
