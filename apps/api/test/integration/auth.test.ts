@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import request from 'supertest';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_USER_ID } from '@flight-log/shared';
 import { createApp } from '../../src/app';
 import { hashPassword } from '../../src/auth/password';
@@ -384,6 +384,278 @@ describe('PATCH /api/auth/me', () => {
         .expect(200);
       expect(res.body.authRequired).toBe(false);
       expect(res.body.user).toMatchObject({ id: DEFAULT_USER_ID, displayName: 'Local Me' });
+    } finally {
+      process.env.AUTH_REQUIRED = 'true';
+    }
+  });
+});
+
+describe('PUT /api/auth/email', () => {
+  const NEW = 'new.address@example.com';
+  const put = (c: ReturnType<typeof client>, body: object) => c.put('/api/auth/email').send(body);
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await prisma.user.update({ where: { id: ALICE.id }, data: { email: ALICE.email } });
+    await prisma.user.update({ where: { id: BOB.id }, data: { email: BOB.email } });
+  });
+
+  it('changes the email, normalizes it, keeps this session and revokes the others', async () => {
+    const here = client();
+    const elsewhere = client();
+    const bob = client();
+    await login(here).expect(200);
+    await login(elsewhere).expect(200);
+    await login(bob, BOB).expect(200);
+
+    const res = await put(here, {
+      newEmail: `  ${NEW.toUpperCase()} `,
+      currentPassword: ALICE.password,
+    }).expect(200);
+    expect(res.body).toEqual({
+      user: { id: ALICE.id, email: NEW, displayName: 'Test Traveler' },
+      authRequired: true,
+    });
+    expect(JSON.stringify(res.body)).not.toMatch(/scrypt|password|hash/i);
+    expect(res.headers['cache-control']).toBe('no-store');
+
+    await here.get('/api/auth/me').expect(200);
+    await elsewhere.get('/api/auth/me').expect(401);
+    await bob.get('/api/auth/me').expect(200); // other users' sessions are untouched
+    expect(await prisma.session.count({ where: { userId: ALICE.id } })).toBe(1);
+
+    await login(client(), { ...ALICE, email: NEW }).expect(200);
+    await login(client()).expect(401); // the old address no longer signs in
+  });
+
+  it('rejects a wrong current password with a 400 and changes nothing', async () => {
+    const here = client();
+    const elsewhere = client();
+    await login(here).expect(200);
+    await login(elsewhere).expect(200);
+    const res = await put(here, { newEmail: NEW, currentPassword: 'not-the-password!!' }).expect(
+      400,
+    );
+    expect(res.body.error.code).toBe('invalid_current_password');
+    expect(JSON.stringify(res.body)).not.toContain(NEW);
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: ALICE.id } });
+    expect(row.email).toBe(ALICE.email);
+    await elsewhere.get('/api/auth/me').expect(200);
+  });
+
+  it('answers 409 for a taken address without echoing it, and only after the password checks out', async () => {
+    const spies = (['log', 'info', 'warn', 'error'] as const).map((m) =>
+      vi.spyOn(console, m).mockImplementation(() => {}),
+    );
+    const here = client();
+    const elsewhere = client();
+    await login(here).expect(200);
+    await login(elsewhere).expect(200);
+
+    // Wrong password + taken address: still the password error, so the 409 is not a probe.
+    const probe = await put(here, { newEmail: BOB.email, currentPassword: 'not-the-password!!' });
+    expect(probe.status).toBe(400);
+
+    for (const attempt of [BOB.email, BOB.email.toUpperCase(), ` ${BOB.email} `]) {
+      const res = await put(here, { newEmail: attempt, currentPassword: ALICE.password });
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('email_unavailable');
+      expect(JSON.stringify(res.body)).not.toMatch(/bob/i);
+    }
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: ALICE.id } });
+    expect(row.email).toBe(ALICE.email);
+    await elsewhere.get('/api/auth/me').expect(200); // a failed change revokes nothing
+    for (const spy of spies) expect(JSON.stringify(spy.mock.calls)).not.toMatch(/bob@|new\./i);
+  });
+
+  it('is a no-op success for your own current address', async () => {
+    const here = client();
+    const elsewhere = client();
+    await login(here).expect(200);
+    await login(elsewhere).expect(200);
+    await put(here, {
+      newEmail: ALICE.email.toUpperCase(),
+      currentPassword: ALICE.password,
+    }).expect(200);
+    await elsewhere.get('/api/auth/me').expect(200);
+  });
+
+  it('validates the body: bad address, extra fields, missing password', async () => {
+    const here = client();
+    await login(here).expect(200);
+    for (const body of [
+      { newEmail: 'not-an-email', currentPassword: ALICE.password },
+      { newEmail: 'a@b', currentPassword: ALICE.password },
+      { newEmail: `${'x'.repeat(250)}@example.com`, currentPassword: ALICE.password },
+      { newEmail: NEW },
+      { newEmail: NEW, currentPassword: ALICE.password, displayName: 'x' },
+    ]) {
+      const res = await put(here, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('validation_error');
+    }
+  });
+
+  it('requires a session, and shares the password endpoint’s throttle', async () => {
+    await put(client(), { newEmail: NEW, currentPassword: ALICE.password }).expect(401);
+
+    const here = client();
+    await login(here).expect(200);
+    for (let i = 0; i < 10; i++) {
+      await here
+        .post('/api/auth/password')
+        .send({ currentPassword: 'wrong-password-guess', newPassword: 'another-long-password' })
+        .expect(400);
+    }
+    const res = await put(here, { newEmail: NEW, currentPassword: ALICE.password }).expect(429);
+    expect(res.headers['retry-after']).toBeDefined();
+    expect(res.body.error.code).toBe('too_many_attempts');
+  });
+
+  it('is unavailable when AUTH_REQUIRED is off', async () => {
+    process.env.AUTH_REQUIRED = 'false';
+    try {
+      const res = await request(createApp())
+        .put('/api/auth/email')
+        .send({ newEmail: NEW, currentPassword: ALICE.password })
+        .expect(400);
+      expect(res.body.error.code).toBe('auth_disabled');
+    } finally {
+      process.env.AUTH_REQUIRED = 'true';
+    }
+  });
+});
+
+describe('sessions', () => {
+  const UA_CHROME =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+  it('records a truncated user agent at login and lists only the caller’s live sessions', async () => {
+    const here = client();
+    const phone = client();
+    const bob = client();
+    await login(here)
+      .set('User-Agent', UA_CHROME + ' ' + 'x'.repeat(400))
+      .expect(200);
+    await login(phone).set('User-Agent', 'PhoneBrowser/1').expect(200);
+    await login(bob, BOB).expect(200);
+    // An expired row must not be listed.
+    await prisma.session.create({
+      data: { userId: ALICE.id, tokenHash: 'expired-hash', expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const res = await here.get('/api/auth/sessions').expect(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body).toHaveLength(2);
+    expect(res.body.filter((s: { current: boolean }) => s.current)).toHaveLength(1);
+    const mine = res.body.find((s: { current: boolean }) => s.current);
+    expect(mine.userAgent).toHaveLength(200);
+    expect(mine.userAgent.startsWith('Mozilla/5.0')).toBe(true);
+    expect(
+      res.body.find((s: { userAgent: string }) => s.userAgent === 'PhoneBrowser/1').current,
+    ).toBe(false);
+    for (const s of res.body) {
+      expect(Object.keys(s).sort()).toEqual([
+        'createdAt',
+        'current',
+        'id',
+        'lastSeenAt',
+        'userAgent',
+      ]);
+      expect(Date.parse(s.createdAt)).not.toBeNaN();
+    }
+    expect(JSON.stringify(res.body)).not.toMatch(/hash|token/i);
+    const bobRows = await prisma.session.findMany({ where: { userId: BOB.id } });
+    expect(res.body.map((s: { id: string }) => s.id)).not.toContain(bobRows[0]!.id);
+  });
+
+  it('stores null when no user agent is sent', async () => {
+    const c = client();
+    await login(c).unset('User-Agent').expect(200);
+    const res = await c.get('/api/auth/sessions').expect(200);
+    expect(res.body[0].userAgent).toBeNull();
+  });
+
+  it('revokes one session by id', async () => {
+    const here = client();
+    const other = client();
+    await login(here).expect(200);
+    await login(other).expect(200);
+    const list = await here.get('/api/auth/sessions').expect(200);
+    const target = list.body.find((s: { current: boolean }) => !s.current);
+    await here.delete(`/api/auth/sessions/${target.id}`).expect(204);
+    await other.get('/api/auth/me').expect(401);
+    await here.get('/api/auth/me').expect(200);
+    await here.delete(`/api/auth/sessions/${target.id}`).expect(404); // already gone
+  });
+
+  it('revoking the current session signs you out and clears the cookie', async () => {
+    const here = client();
+    await login(here).expect(200);
+    const [me] = (await here.get('/api/auth/sessions').expect(200)).body;
+    const res = await here.delete(`/api/auth/sessions/${me.id}`).expect(204);
+    expect(((res.headers['set-cookie'] as unknown as string[]) ?? []).join()).toMatch(
+      /Max-Age=0|Expires=/,
+    );
+    await here.get('/api/auth/me').expect(401);
+  });
+
+  it('cannot see or revoke another user’s sessions (404, and nothing is deleted)', async () => {
+    const alice = client();
+    const bob = client();
+    await login(alice).expect(200);
+    await login(bob, BOB).expect(200);
+    const bobRow = (await prisma.session.findMany({ where: { userId: BOB.id } }))[0]!;
+    await alice.delete(`/api/auth/sessions/${bobRow.id}`).expect(404);
+    await bob.get('/api/auth/me').expect(200);
+    expect(await prisma.session.count({ where: { userId: BOB.id } })).toBe(1);
+    // Alice's revoke-others never touches Bob either.
+    await alice.post('/api/auth/sessions/revoke-others').expect(204);
+    await bob.get('/api/auth/me').expect(200);
+  });
+
+  it('rejects a malformed id with a 400', async () => {
+    const c = client();
+    await login(c).expect(200);
+    const res = await c.delete('/api/auth/sessions/not-a-uuid').expect(400);
+    expect(res.body.error.code).toBe('validation_error');
+  });
+
+  it('revoke-others keeps only the current session', async () => {
+    const here = client();
+    const a = client();
+    const b = client();
+    await login(here).expect(200);
+    await login(a).expect(200);
+    await login(b).expect(200);
+    await here.post('/api/auth/sessions/revoke-others').expect(204);
+    await here.get('/api/auth/me').expect(200);
+    await a.get('/api/auth/me').expect(401);
+    await b.get('/api/auth/me').expect(401);
+    expect(await here.get('/api/auth/sessions')).toMatchObject({ body: [{ current: true }] });
+  });
+
+  it('requires a session and CSRF protection like every other write', async () => {
+    await client().get('/api/auth/sessions').expect(401);
+    await client().post('/api/auth/sessions/revoke-others').expect(401);
+    await request(createApp())
+      .post('/api/auth/sessions/revoke-others')
+      .set('Origin', 'https://evil.example')
+      .expect(403);
+  });
+
+  it('is unavailable when AUTH_REQUIRED is off', async () => {
+    process.env.AUTH_REQUIRED = 'false';
+    try {
+      const app = createApp();
+      for (const r of [
+        request(app).get('/api/auth/sessions'),
+        request(app).post('/api/auth/sessions/revoke-others'),
+        request(app).delete(`/api/auth/sessions/${DEFAULT_USER_ID}`),
+      ]) {
+        const res = await r.expect(400);
+        expect(res.body.error.code).toBe('auth_disabled');
+      }
     } finally {
       process.env.AUTH_REQUIRED = 'true';
     }

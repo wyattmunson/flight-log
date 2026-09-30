@@ -12,3 +12,5 @@ export const DEFAULT_USER_ID = '00000000-0000-4000-8000-000000000001';
 /** Password policy: length only, no composition rules. */
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
+/** Longest User-Agent kept on a session row. */
+export const SESSION_USER_AGENT_MAX_LENGTH = 200;

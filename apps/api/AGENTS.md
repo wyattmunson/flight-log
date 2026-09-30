@@ -12,7 +12,7 @@ src/env.ts            typed getters over process.env (read lazily, so tests can 
 src/db.ts             Prisma singleton
 src/http/             errors.ts (AppError, errorHandler), route.ts (async wrapper), resolveUser.ts (sets req.userId),
                       csrf.ts (Origin / Sec-Fetch-Site guard, only when AUTH_REQUIRED), requestLog.ts
-src/auth/             password.ts (scrypt), sessions.ts (DB sessions + cookie helpers), cookies.ts, throttle.ts,
+src/auth/             password.ts (scrypt), sessions.ts (DB sessions, list/revoke, cookie helpers), cookies.ts, throttle.ts,
                       users.ts (create/adopt/set-password), cli.ts (npm run user:create / user:set-password)
 src/routes/           thin: Zod-parse input → call service/DAL → res.json. No Prisma here.
 src/services/         derive.ts (UTC conversion, distance, air time), flights.ts (manual create/PATCH)
@@ -69,6 +69,14 @@ convert with `Number()`(see the`num()` helpers).
   guard answers 403. The login throttle lives in `authRouter()`, so each `createApp()` starts fresh.
 - `PATCH /api/auth/me` changes only `displayName`, for `req.userId` (the schema is `.strict()`, so email or
   password fields are rejected). It also works with auth off, acting on the default user.
+- Sensitive account changes (`POST /password`, `PUT /email`) both go through `reauthenticate()` in
+  `routes/auth.ts`: one throttle key (`pw:<userId>`), `verifyPassword` / `verifyAgainstDummy`, and a 400
+  (never 401) for a wrong password. Add new ones the same way. A taken email is a bare 409 from catching
+  Prisma `P2002` in the route (the global handler's P2002 message is about flights). Never echo the address.
+- Session routes (`GET /sessions`, `DELETE /sessions/:id`, `POST /sessions/revoke-others`) and
+  `PUT /email` answer 400 `auth_disabled` when `AUTH_REQUIRED` is off, since there is no session then.
+  They only touch sessions through `auth/sessions.ts`, always with `req.userId`. Never select or return
+  `tokenHash`. `createSession(userId, userAgent?)` stores the UA truncated; never store IPs.
 - Wrong _current_ password on `/api/auth/password` is a 400 on purpose: the web app treats every 401 as
   "session lost".
 

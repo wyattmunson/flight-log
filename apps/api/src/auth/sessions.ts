@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { SESSION_USER_AGENT_MAX_LENGTH, type SessionInfo } from '@flight-log/shared';
 import * as dal from '../dal/auth';
 import { env } from '../env';
 import {
@@ -29,12 +30,17 @@ export interface ActiveSession {
   refreshed: boolean;
 }
 
-export async function createSession(userId: string, now = new Date()) {
+/** Empty or missing becomes null; anything longer than the cap is cut. Never store an IP. */
+export const truncateUserAgent = (userAgent: string | undefined) =>
+  userAgent?.slice(0, SESSION_USER_AGENT_MAX_LENGTH) || null;
+
+export async function createSession(userId: string, userAgent?: string, now = new Date()) {
   const token = randomBytes(32).toString('base64url');
   await dal.insertSession({
     userId,
     tokenHash: hashToken(token),
     expiresAt: new Date(now.getTime() + ttlMs()),
+    userAgent: truncateUserAgent(userAgent),
   });
   await dal.purgeExpiredSessions(now, userId);
   return token;
@@ -63,6 +69,29 @@ export async function deleteSession(token: string | undefined) {
 
 export const deleteAllSessions = (userId: string, exceptSessionId?: string) =>
   dal.deleteSessionsForUser(userId, exceptSessionId);
+
+/** The user's unexpired sessions; `currentId` marks the caller's own. */
+export async function listSessions(
+  userId: string,
+  currentId: string | undefined,
+  now = new Date(),
+): Promise<SessionInfo[]> {
+  const rows = await dal.listSessionsForUser(userId, now);
+  return rows.map((r) => ({
+    id: r.id,
+    createdAt: r.createdAt.toISOString(),
+    lastSeenAt: r.lastSeenAt.toISOString(),
+    userAgent: r.userAgent,
+    current: r.id === currentId,
+  }));
+}
+
+/** Revokes one of the user's sessions. False when it is not theirs (or does not exist). */
+export const revokeSession = (userId: string, id: string) => dal.deleteSessionForUser(userId, id);
+
+/** Signs the user out everywhere except `currentId`. */
+export const revokeOtherSessions = (userId: string, currentId: string) =>
+  dal.deleteSessionsForUser(userId, currentId);
 
 export const purgeExpired = (now = new Date()) => dal.purgeExpiredSessions(now);
 

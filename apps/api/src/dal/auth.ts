@@ -38,10 +38,18 @@ export interface SessionRow {
 
 const sessionSelect = { id: true, userId: true, lastSeenAt: true, expiresAt: true } as const;
 
+export interface SessionListRow {
+  id: string;
+  createdAt: Date;
+  lastSeenAt: Date;
+  userAgent: string | null;
+}
+
 export const insertSession = (data: {
   userId: string;
   tokenHash: string;
   expiresAt: Date;
+  userAgent?: string | null;
 }): Promise<SessionRow> => prisma.session.create({ data, select: sessionSelect });
 
 export const findSessionByTokenHash = (tokenHash: string): Promise<SessionRow | null> =>
@@ -63,3 +71,15 @@ export const deleteSessionsForUser = (userId: string, exceptId?: string) =>
 
 export const purgeExpiredSessions = (now: Date, userId?: string) =>
   prisma.session.deleteMany({ where: { expiresAt: { lte: now }, ...(userId ? { userId } : {}) } });
+
+/** A user's unexpired sessions, newest activity first. Selects no token material. */
+export const listSessionsForUser = (userId: string, now: Date): Promise<SessionListRow[]> =>
+  prisma.session.findMany({
+    where: { userId, expiresAt: { gt: now } },
+    select: { id: true, createdAt: true, lastSeenAt: true, userAgent: true },
+    orderBy: [{ lastSeenAt: 'desc' }, { id: 'asc' }],
+  });
+
+/** Deletes one session if it belongs to `userId`; "not yours" is indistinguishable from "not there". */
+export const deleteSessionForUser = async (userId: string, id: string): Promise<boolean> =>
+  (await prisma.session.deleteMany({ where: { id, userId } })).count > 0;

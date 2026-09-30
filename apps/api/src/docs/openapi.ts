@@ -282,6 +282,70 @@ export const openApiSpec = {
         },
       },
     },
+    '/api/auth/email': {
+      put: {
+        tags: ['Auth'],
+        summary: 'Change email',
+        description:
+          'Re-checks the current password (same throttle and constant-time path as `POST /api/auth/password`; wrong password is a 400 `invalid_current_password`), normalizes the email like login (trimmed, lower-cased) and applies it IMMEDIATELY: there is no email delivery, so no confirmation step. Signs out every OTHER session and keeps the current one. A taken address is a bare 409 `email_unavailable` that never echoes the address. Only available with `AUTH_REQUIRED=true` (400 `auth_disabled` otherwise).',
+        requestBody: { required: true, content: json(ref('ChangeEmailInput')) },
+        responses: {
+          '200': {
+            description: 'Updated user',
+            headers: { ...noStore },
+            content: json(ref('AuthMe')),
+          },
+          '400': error(
+            'Validation failed, the current password is wrong (`invalid_current_password`), or auth is disabled (`auth_disabled`)',
+          ),
+          '409': error('That address is not available (`email_unavailable`)'),
+          '429': tooManyAttempts,
+        },
+      },
+    },
+    '/api/auth/sessions': {
+      get: {
+        tags: ['Auth'],
+        summary: 'List active sessions',
+        description:
+          "The signed-in user's unexpired sessions, most recently used first. `current` marks the session making the request. Never includes tokens or hashes. `lastSeenAt` is refreshed at most hourly. Only with `AUTH_REQUIRED=true`.",
+        responses: {
+          '200': {
+            description: 'Sessions',
+            headers: { ...noStore },
+            content: json(arrayOf(ref('SessionInfo'))),
+          },
+          '400': error('Auth is disabled (`auth_disabled`)'),
+        },
+      },
+    },
+    '/api/auth/sessions/revoke-others': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Sign out every other session',
+        description: 'Keeps the current session. Only with `AUTH_REQUIRED=true`.',
+        responses: {
+          '204': { description: 'Done', headers: { ...noStore } },
+          '400': error('Auth is disabled (`auth_disabled`)'),
+        },
+      },
+    },
+    '/api/auth/sessions/{id}': {
+      delete: {
+        tags: ['Auth'],
+        summary: 'Sign out one session',
+        description:
+          "Scoped to the signed-in user: someone else's session id is a 404, same as a missing one. Revoking the current session also clears the cookie. Only with `AUTH_REQUIRED=true`.",
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '204': { description: 'Revoked', headers: { ...noStore } },
+          '400': error('Malformed id (`validation_error`) or auth is disabled (`auth_disabled`)'),
+          '404': notFoundResponse,
+        },
+      },
+    },
     '/api/flights': {
       get: {
         tags: ['Flights'],
@@ -530,6 +594,17 @@ export const openApiSpec = {
         password: { type: 'string', maxLength: 1024, format: 'password' },
       }),
       UpdateProfileInput: obj({ displayName: { type: 'string', minLength: 1, maxLength: 80 } }),
+      ChangeEmailInput: obj({
+        newEmail: { type: 'string', format: 'email', maxLength: 254 },
+        currentPassword: { type: 'string', maxLength: 1024, format: 'password' },
+      }),
+      SessionInfo: obj({
+        id: { type: 'string', format: 'uuid' },
+        createdAt: dateTime('When the session was created (login).'),
+        lastSeenAt: dateTime('Last use, refreshed at most hourly.'),
+        userAgent: nstr,
+        current: bool,
+      }),
       ChangePasswordInput: obj({
         currentPassword: { type: 'string', maxLength: 1024, format: 'password' },
         newPassword: { type: 'string', minLength: 12, maxLength: 128, format: 'password' },

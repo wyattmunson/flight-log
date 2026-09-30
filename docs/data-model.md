@@ -30,6 +30,7 @@ erDiagram
     timestamptz created_at
     timestamptz last_seen_at
     timestamptz expires_at "indexed"
+    text user_agent "nullable, browser UA at login, max 200 chars, no IP"
   }
   airports {
     int id PK "OurAirports id"
@@ -156,6 +157,13 @@ on, the user of the session cookie (401 otherwise).
   SHA-256 hex (`token_hash`) is stored, so a database leak does not yield usable cookies. Expiry is
   sliding: `expires_at`/`last_seen_at` are pushed forward, at most once an hour, on use. Expired rows
   are purged at that user's next login. Deleting a user deletes their sessions.
+- `sessions.user_agent` is the login request's `User-Agent`, cut to 200 characters in the app (the column
+  is plain `TEXT`). It exists only so the owner can recognise their devices on the Profile page; IP
+  addresses are deliberately not stored. Rows from before the column existed have NULL. Every read or
+  delete of a session from a route goes through `auth/sessions.ts` and is scoped by `user_id`
+  (`deleteSessionForUser`, `listSessionsForUser`), so someone else's session id is just "not found".
+- Changing `users.email` (`PUT /api/auth/email`) relies on the `UNIQUE(email)` constraint: a violation
+  becomes the 409, which avoids a check-then-write race. The address is never logged or echoed.
 
 Reference tables (`airports`, `airlines`, `aircraft_types`, `aircraft_families`, `flight_lookup_cache`) are global.
 

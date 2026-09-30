@@ -44,6 +44,8 @@ model Session {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
   expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  /// Browser User-Agent at login, truncated to 200 chars. Shown only to the owner. No IPs are stored.
+  userAgent  String?  @map("user_agent")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

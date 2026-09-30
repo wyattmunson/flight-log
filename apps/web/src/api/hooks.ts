@@ -4,7 +4,9 @@ import type {
   AirportSummary,
   AppConfig,
   AuthMe,
+  ChangeEmailInput,
   ChangePasswordInput,
+  SessionInfo,
   UpdateProfileInput,
   FilterOptions,
   FlightDetail,
@@ -64,6 +66,45 @@ export function useUpdateProfile() {
     onSuccess: (me) => {
       queryClient.setQueryData(ME_KEY, me);
       return queryClient.invalidateQueries({ queryKey: ME_KEY });
+    },
+  });
+}
+
+export const SESSIONS_KEY = ['sessions'] as const;
+
+/** The signed-in user's active sessions. Only meaningful (and only requested) with auth on. */
+export const useSessions = (enabled: boolean) =>
+  useQuery({
+    queryKey: SESSIONS_KEY,
+    queryFn: () => apiFetch<SessionInfo[]>('/auth/sessions'),
+    enabled,
+  });
+
+export function useRevokeSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/auth/sessions/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: SESSIONS_KEY }),
+  });
+}
+
+export function useRevokeOtherSessions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<void>('/auth/sessions/revoke-others', { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: SESSIONS_KEY }),
+  });
+}
+
+/** The API signs out every other session on success, so the sessions list is refreshed too. */
+export function useChangeEmail() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ChangeEmailInput) =>
+      apiFetch<AuthMe>('/auth/email', { method: 'PUT', json: input }),
+    onSuccess: (me) => {
+      queryClient.setQueryData(ME_KEY, me);
+      return queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
     },
   });
 }

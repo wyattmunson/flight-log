@@ -115,18 +115,18 @@ Why it's shaped this way is in [Design decisions](#design-decisions).
 
 **Web (`apps/web/src`)**
 
-| Piece                                                                  | Responsibility                                                                                                                                                       |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pages/MapPage` + `components/FlightMap`                               | MapLibre map: frequency-weighted arcs, sized airport markers, popups, route list and route flights panel                                                             |
-| `pages/FlightsPage` + `components/FlightDetail`, `Drawer`              | Sortable, filterable, paginated table; detail drawer (`?flight=<id>`) with local times; delete                                                                       |
-| `pages/FlightFormPage` + `components/Combobox`                         | Add/edit form with airport/airline typeahead, live distance, local-time inputs, **Look up flight**                                                                   |
-| `pages/ImportPage`                                                     | Drag-and-drop upload, preview (counts, sample, errors), commit summary, import history + undo                                                                        |
-| `pages/StatsPage` + `components/charts`, `SortableTable`               | Headline cards, records, punctuality, Recharts charts with table views, mi/km toggle                                                                                 |
-| `components/FilterBar`, `lib/useFilters`                               | Year range, airline and cabin filters stored in the URL, shared by map, list and stats                                                                               |
-| `components/Layout`, `States`                                          | Nav, attribution footer; spinner, error (with retry) and empty states                                                                                                |
-| `pages/LoginPage`, `ProfilePage`, `components/RequireAuth`, `UserMenu` | Sign in (returns to the page you asked for), route guard, user menu, profile (name + change password; login UI and the password section are hidden when auth is off) |
-| `api/client`, `api/hooks`                                              | `fetch` wrapper with typed errors; every TanStack Query hook plus cache invalidation                                                                                 |
-| `lib/format`, `lib/useChartTheme`                                      | Display formatting (dates, distances, local times, country names); chart colors from CSS tokens                                                                      |
+| Piece                                                                  | Responsibility                                                                                                                                                            |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pages/MapPage` + `components/FlightMap`                               | MapLibre map: frequency-weighted arcs, sized airport markers, popups, route list and route flights panel                                                                  |
+| `pages/FlightsPage` + `components/FlightDetail`, `Drawer`              | Sortable, filterable, paginated table; detail drawer (`?flight=<id>`) with local times; delete                                                                            |
+| `pages/FlightFormPage` + `components/Combobox`                         | Add/edit form with airport/airline typeahead, live distance, local-time inputs, **Look up flight**                                                                        |
+| `pages/ImportPage`                                                     | Drag-and-drop upload, preview (counts, sample, errors), commit summary, import history + undo                                                                             |
+| `pages/StatsPage` + `components/charts`, `SortableTable`               | Headline cards, records, punctuality, Recharts charts with table views, mi/km toggle                                                                                      |
+| `components/FilterBar`, `lib/useFilters`                               | Year range, airline and cabin filters stored in the URL, shared by map, list and stats                                                                                    |
+| `components/Layout`, `States`                                          | Nav, attribution footer; spinner, error (with retry) and empty states                                                                                                     |
+| `pages/LoginPage`, `ProfilePage`, `components/RequireAuth`, `UserMenu` | Sign in (returns to the page you asked for), route guard, user menu, profile (name, email, password, active sessions; everything but the name is hidden when auth is off) |
+| `api/client`, `api/hooks`                                              | `fetch` wrapper with typed errors; every TanStack Query hook plus cache invalidation                                                                                      |
+| `lib/format`, `lib/useChartTheme`                                      | Display formatting (dates, distances, local times, country names); chart colors from CSS tokens                                                                           |
 
 **Shared (`packages/shared/src`)**: `schemas.ts` (Zod inputs), `types.ts` (API responses), `distance.ts`,
 `geo.ts` (great circle with unwrapped longitudes), `normalize.ts`, `time.ts` (Luxon parsing/formatting), `constants.ts`.
@@ -166,6 +166,9 @@ sequenceDiagram
 | POST             | `/api/auth/login`, `/logout`                         | `{ email, password }` sets the session cookie; logout clears it (204, works without a session)                                              |
 | GET / PATCH      | `/api/auth/me`                                       | current user + `authRequired`; PATCH `{ displayName }` renames the current user (trimmed, 1 to 80 characters)                               |
 | POST             | `/api/auth/password`                                 | `{ currentPassword, newPassword }` signs out your other sessions                                                                            |
+| PUT              | `/api/auth/email`                                    | `{ newEmail, currentPassword }` changes the email immediately (409 `email_unavailable` if taken) and signs out your other sessions          |
+| GET              | `/api/auth/sessions`                                 | your unexpired sessions: `[{ id, createdAt, lastSeenAt, userAgent, current }]` (never tokens)                                               |
+| DELETE / POST    | `/api/auth/sessions/:id`, `/sessions/revoke-others`  | sign out one session (404 unless it is yours) / every session except the current one                                                        |
 | GET              | `/api/config`                                        | Map style URL, lookup status, API docs URL                                                                                                  |
 | GET              | `/api/docs`, `/api/openapi.json`                     | Swagger UI and the raw OpenAPI spec (`ENABLE_API_DOCS`, on by default)                                                                      |
 | GET              | `/api/flights`                                       | `page, pageSize, sort (date, -date, distance, route, airline, flightNumber, aircraft, duration), year, yearFrom, yearTo, airline, cabin, q` |
@@ -223,7 +226,9 @@ Traefik basic auth that used to guard the site is gone.
   `scrypt$N$r$p$salt$hash`, so the cost can be raised later. 12 to 128 characters, no composition
   rules, must not equal the email.
 - **Sessions.** 30-day sliding expiry (`SESSION_TTL_DAYS`), extended at most once an hour while you use
-  the app. Logout deletes the session. Changing your password signs out your other sessions.
+  the app. Logout deletes the session. Changing your password or email signs out your other sessions.
+  Each session records the browser's `User-Agent` at login (truncated to 200 characters; no IP address is
+  stored) so the Profile page can label devices.
 - **Abuse limits.** Failed-login throttling per IP and per email (in memory, per API process; 429 with
   `Retry-After`). With auth on, non-GET requests must be same-origin (`Origin`, else `Sec-Fetch-Site`),
   otherwise 403 `csrf_rejected`. Behind Traefik the API trusts one proxy hop (`TRUST_PROXY_HOPS`).
@@ -236,6 +241,11 @@ Traefik basic auth that used to guard the site is gone.
   only the current user) and holds the change-password form (`POST /api/auth/password`, unchanged).
   With auth off only the name section is shown, with a note that credentials are managed elsewhere.
   `/change-password` and the old `/account/password` redirect to `/profile`.
+  With auth on it also has an **Email** section (`PUT /api/auth/email`: re-checks your password with the
+  same scrypt path and the same throttle as the password endpoint, normalizes the address like login,
+  keeps this session, signs out the rest) and an **Active sessions** section (device labels parsed from
+  the User-Agent, per-device sign out, and a confirmed "Sign out other devices"). Email and the session
+  routes answer 400 `auth_disabled` when `AUTH_REQUIRED` is off.
 
 **Adding a user** (there is no signup page). From `apps/api`, against the database in `.env`:
 
@@ -377,7 +387,7 @@ The analysis recommends **AeroDataBox** (free RapidAPI tier) as primary and **Fl
 
 **Platform**
 
-- Auth is opt-in. With `AUTH_REQUIRED` off (the default; local dev) every request acts as the seeded user `DEFAULT_USER_ID` and the web app shows no login UI. With it on, requests act as the user of the session cookie. There is no signup, email verification, password reset, MFA or roles; accounts are created with the CLI (see [Authentication](#authentication)).
+- Auth is opt-in. With `AUTH_REQUIRED` off (the default; local dev) every request acts as the seeded user `DEFAULT_USER_ID` and the web app shows no login UI. With it on, requests act as the user of the session cookie. There is no signup, email verification, password reset, MFA or roles; accounts are created with the CLI. **Changing your email is immediate**: with no email delivery there is no confirmation link, so the current password is the only check (a typo locks you out of the old address until you change it back or an admin runs `user:set-password`). Session "device" labels come from the client-supplied `User-Agent`, so treat them as a hint, not proof (see [Authentication](#authentication)).
 - The map style URL comes from `MAP_STYLE_URL` and reaches the browser via `/api/config`, so one env
   var configures it. The default is OpenFreeMap "liberty", which needs no key.
 - Default host ports are 5434 (db) and 3001 (api) so they don't collide with common local

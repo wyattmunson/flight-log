@@ -294,3 +294,15 @@ export interface AuthMe {
   /** False when the server runs without `AUTH_REQUIRED` (the web app then shows no login UI). */
   authRequired: boolean;
 }
+
+/** One row of `GET /api/auth/sessions`. Never carries the token or its hash. */
+export interface SessionInfo {
+  id: string;
+  createdAt: string;
+  /** Updated at most hourly while the session is in use. */
+  lastSeenAt: string;
+  /** Browser User-Agent recorded at login (max 200 chars); null for older sessions. */
+  userAgent: string | null;
+  /** True for the session making this request. */
+  current: boolean;
+}

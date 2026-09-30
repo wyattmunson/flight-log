@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
@@ -17,6 +17,7 @@ function mockApi() {
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
+      if (url === '/api/auth/sessions') return new Response('[]', { status: 200 });
       if (init?.method === 'PATCH') {
         const { displayName } = JSON.parse(String(init.body));
         if (displayName.length > 80)
@@ -102,7 +103,8 @@ describe('ProfilePage', () => {
     current = { user: { id: 'u1', email: null, displayName: 'Ada' }, authRequired: true };
     mockApi();
     renderProfile();
-    expect(await screen.findByLabelText('Current password')).toBeInTheDocument();
+    const password = (await screen.findByRole('heading', { name: 'Password' })).closest('section')!;
+    expect(within(password).getByLabelText('Current password')).toBeInTheDocument();
   });
 
   it('redirects /change-password to /profile', async () => {

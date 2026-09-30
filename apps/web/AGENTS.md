@@ -11,7 +11,7 @@ src/App.tsx            routes; /login is public, everything else sits under <Req
                        MapPage and StatsPage are React.lazy (MapLibre/Recharts are heavy)
 src/api/client.ts      apiFetch() + ApiError (fieldErrors from validation details)
 src/api/hooks.ts       every query/mutation hook; mutations invalidate all flight-derived keys
-src/lib/               auth.ts (safeNextPath, loginPath, handleUnauthorized), format.ts (display helpers), useFilters.ts (URL-backed filters),
+src/lib/               auth.ts (safeNextPath, loginPath, handleUnauthorized), userAgent.ts (deviceLabel: "Chrome on macOS"), format.ts (display helpers), useFilters.ts (URL-backed filters),
                        useChartTheme.ts (resolved CSS color tokens), useDebounced.ts
 src/components/        Layout (nav + attribution footer), FilterBar, Combobox (ARIA typeahead),
                        Drawer (dialog), States (Spinner/ErrorState/EmptyState/NoFlightsYet),
@@ -41,11 +41,14 @@ test/                  Vitest + React Testing Library (jsdom)
 
 ## Auth
 
-- `useMe` / `useLogin` / `useLogout` / `useUpdateProfile` / `useChangePassword` are in `hooks.ts`. Login and logout clear the whole
+- `useMe` / `useLogin` / `useLogout` / `useUpdateProfile` / `useChangeEmail` / `useSessions` / `useRevokeSession` / `useRevokeOtherSessions` / `useChangePassword` are in `hooks.ts`. Login and logout clear the whole
   query cache. `RequireAuth` shows the Spinner while `/auth/me` loads, sends a 401 to `/login?next=…`, and
   renders the app with no login UI when `authRequired` is false.
 - Decide "signed in" from `me.status === 'success'`, never `me.data`: after a failed re-check TanStack Query
   keeps the old `data` beside the error, which caused a login <-> guard redirect loop.
+- ProfilePage sections other than Name (Email, Password, Active sessions) render only when
+  `authRequired`; the sessions query is not even issued otherwise. Revoking the _current_ session is not
+  offered in the UI (that is Sign out), and "Sign out other devices" needs the inline confirmation.
 - Any `next` target must go through `safeNextPath()` (single leading `/`, no `//`, no backslash).
 - The dev proxy keeps `changeOrigin: false`, so the API's CSRF check sees the browser's `Host`.
 

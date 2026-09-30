@@ -150,6 +150,24 @@ export const ChangePasswordInputSchema = z.object({
 });
 export type ChangePasswordInput = z.infer<typeof ChangePasswordInputSchema>;
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** `PUT /api/auth/email`. Normalized exactly like login (trimmed, lower-cased). */
+export const ChangeEmailInputSchema = z
+  .object({
+    newEmail: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .max(254)
+      .regex(EMAIL_PATTERN, 'Enter a valid email address'),
+    currentPassword: z.string().min(1).max(1024),
+  })
+  .strict();
+export type ChangeEmailInput = z.infer<typeof ChangeEmailInputSchema>;
+
+export const SessionIdParamSchema = z.object({ id: z.string().uuid() });
+
 export const DISPLAY_NAME_MAX_LENGTH = 80;
 
 /** `PATCH /api/auth/me`. Only the name is editable; email and password have their own paths. */
