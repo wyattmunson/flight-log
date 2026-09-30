@@ -159,13 +159,19 @@ export interface LocalTimeParts {
   iso: string;
 }
 
-/** Render a UTC instant in an airport's local time. */
-export function toLocalParts(utc: string | Date, zone: string | null | undefined): LocalTimeParts {
+export type TimeFormat = '12h' | '24h';
+
+/** Render a UTC instant in an airport's local time. `timeFormat` only changes `time` ("2:05 PM"). */
+export function toLocalParts(
+  utc: string | Date,
+  zone: string | null | undefined,
+  timeFormat: TimeFormat = '24h',
+): LocalTimeParts {
   const base = utc instanceof Date ? DateTime.fromJSDate(utc) : DateTime.fromISO(utc);
   const dt = base.setZone(isValidZone(zone) ? zone : 'UTC');
   return {
     date: dt.toFormat('ccc, LLL d yyyy'),
-    time: dt.toFormat('HH:mm'),
+    time: dt.setLocale('en-US').toFormat(timeFormat === '12h' ? 'h:mm a' : 'HH:mm'),
     abbr: dt.offsetNameShort ?? dt.toFormat('ZZ'),
     iso: dt.toISO() ?? '',
   };

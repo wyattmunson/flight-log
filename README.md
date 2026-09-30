@@ -115,18 +115,18 @@ Why it's shaped this way is in [Design decisions](#design-decisions).
 
 **Web (`apps/web/src`)**
 
-| Piece                                                                  | Responsibility                                                                                                                                                            |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pages/MapPage` + `components/FlightMap`                               | MapLibre map: frequency-weighted arcs, sized airport markers, popups, route list and route flights panel                                                                  |
-| `pages/FlightsPage` + `components/FlightDetail`, `Drawer`              | Sortable, filterable, paginated table; detail drawer (`?flight=<id>`) with local times; delete                                                                            |
-| `pages/FlightFormPage` + `components/Combobox`                         | Add/edit form with airport/airline typeahead, live distance, local-time inputs, **Look up flight**                                                                        |
-| `pages/ImportPage`                                                     | Drag-and-drop upload, preview (counts, sample, errors), commit summary, import history + undo                                                                             |
-| `pages/StatsPage` + `components/charts`, `SortableTable`               | Headline cards, records, punctuality, Recharts charts with table views, mi/km toggle                                                                                      |
-| `components/FilterBar`, `lib/useFilters`                               | Year range, airline and cabin filters stored in the URL, shared by map, list and stats                                                                                    |
-| `components/Layout`, `States`                                          | Nav, attribution footer; spinner, error (with retry) and empty states                                                                                                     |
-| `pages/LoginPage`, `ProfilePage`, `components/RequireAuth`, `UserMenu` | Sign in (returns to the page you asked for), route guard, user menu, profile (name, email, password, active sessions; everything but the name is hidden when auth is off) |
-| `api/client`, `api/hooks`                                              | `fetch` wrapper with typed errors; every TanStack Query hook plus cache invalidation                                                                                      |
-| `lib/format`, `lib/useChartTheme`                                      | Display formatting (dates, distances, local times, country names); chart colors from CSS tokens                                                                           |
+| Piece                                                                  | Responsibility                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pages/MapPage` + `components/FlightMap`                               | MapLibre map: frequency-weighted arcs, sized airport markers, popups, route list and route flights panel                                                                                                                        |
+| `pages/FlightsPage` + `components/FlightDetail`, `Drawer`              | Sortable, filterable, paginated table; detail drawer (`?flight=<id>`) with local times; delete                                                                                                                                  |
+| `pages/FlightFormPage` + `components/Combobox`                         | Add/edit form with airport/airline typeahead, live distance, local-time inputs, **Look up flight**                                                                                                                              |
+| `pages/ImportPage`                                                     | Drag-and-drop upload, preview (counts, sample, errors), commit summary, import history + undo                                                                                                                                   |
+| `pages/StatsPage` + `components/charts`, `SortableTable`               | Headline cards, records, punctuality, Recharts charts with table views, mi/km toggle (defaults to your distance preference)                                                                                                     |
+| `components/FilterBar`, `lib/useFilters`                               | Year range, airline and cabin filters stored in the URL, shared by map, list and stats                                                                                                                                          |
+| `components/Layout`, `States`                                          | Nav, attribution footer; spinner, error (with retry) and empty states                                                                                                                                                           |
+| `pages/LoginPage`, `ProfilePage`, `components/RequireAuth`, `UserMenu` | Sign in (returns to the page you asked for), route guard, user menu, profile (name, preferences, email, password, active sessions, data export, delete-all; the email, password and sessions parts are hidden when auth is off) |
+| `api/client`, `api/hooks`                                              | `fetch` wrapper with typed errors; every TanStack Query hook plus cache invalidation                                                                                                                                            |
+| `lib/format`, `lib/useChartTheme`                                      | Display formatting (dates, distances, local times, country names); chart colors from CSS tokens                                                                                                                                 |
 
 **Shared (`packages/shared/src`)**: `schemas.ts` (Zod inputs), `types.ts` (API responses), `distance.ts`,
 `geo.ts` (great circle with unwrapped longitudes), `normalize.ts`, `time.ts` (Luxon parsing/formatting), `constants.ts`.
@@ -160,29 +160,32 @@ sequenceDiagram
 
 ### API
 
-| Method           | Path                                                 |                                                                                                                                             |
-| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET              | `/api/health`                                        | DB ping                                                                                                                                     |
-| POST             | `/api/auth/login`, `/logout`                         | `{ email, password }` sets the session cookie; logout clears it (204, works without a session)                                              |
-| GET / PATCH      | `/api/auth/me`                                       | current user + `authRequired`; PATCH `{ displayName }` renames the current user (trimmed, 1 to 80 characters)                               |
-| POST             | `/api/auth/password`                                 | `{ currentPassword, newPassword }` signs out your other sessions                                                                            |
-| PUT              | `/api/auth/email`                                    | `{ newEmail, currentPassword }` changes the email immediately (409 `email_unavailable` if taken) and signs out your other sessions          |
-| GET              | `/api/auth/sessions`                                 | your unexpired sessions: `[{ id, createdAt, lastSeenAt, userAgent, current }]` (never tokens)                                               |
-| DELETE / POST    | `/api/auth/sessions/:id`, `/sessions/revoke-others`  | sign out one session (404 unless it is yours) / every session except the current one                                                        |
-| GET              | `/api/config`                                        | Map style URL, lookup status, API docs URL                                                                                                  |
-| GET              | `/api/docs`, `/api/openapi.json`                     | Swagger UI and the raw OpenAPI spec (`ENABLE_API_DOCS`, on by default)                                                                      |
-| GET              | `/api/flights`                                       | `page, pageSize, sort (date, -date, distance, route, airline, flightNumber, aircraft, duration), year, yearFrom, yearTo, airline, cabin, q` |
-| GET/PATCH/DELETE | `/api/flights/:id`                                   | Detail includes PNR and the raw CSV row                                                                                                     |
-| POST             | `/api/flights`                                       | Times without an offset are local to the relevant airport                                                                                   |
-| POST             | `/api/import/preview`                                | multipart field `file`                                                                                                                      |
-| POST             | `/api/import/commit`                                 | `{ previewId }`                                                                                                                             |
-| GET / DELETE     | `/api/import/batches[/:id]`                          | list / undo                                                                                                                                 |
-| GET              | `/api/map`                                           | routes + airports (same filters)                                                                                                            |
-| GET              | `/api/map/routes/:a/:b/flights`                      | flights on an undirected route                                                                                                              |
-| GET              | `/api/stats`                                         | dashboard aggregates (same filters)                                                                                                         |
-| GET              | `/api/filter-options`                                | years, airlines, cabins present in your data                                                                                                |
-| GET              | `/api/airports/search?q=`, `/api/airlines/search?q=` | typeahead                                                                                                                                   |
-| POST             | `/api/lookup`                                        | `{ flightNumber, date }`. Returns 501 `{ configured: false }` unless a provider is set                                                      |
+| Method           | Path                                                 |                                                                                                                                                  |
+| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET              | `/api/health`                                        | DB ping                                                                                                                                          |
+| POST             | `/api/auth/login`, `/logout`                         | `{ email, password }` sets the session cookie; logout clears it (204, works without a session)                                                   |
+| GET / PATCH      | `/api/auth/me`                                       | current user + `authRequired`; PATCH `{ displayName }` renames the current user (trimmed, 1 to 80 characters)                                    |
+| POST             | `/api/auth/password`                                 | `{ currentPassword, newPassword }` signs out your other sessions                                                                                 |
+| PUT              | `/api/auth/email`                                    | `{ newEmail, currentPassword }` changes the email immediately (409 `email_unavailable` if taken) and signs out your other sessions               |
+| GET              | `/api/auth/sessions`                                 | your unexpired sessions: `[{ id, createdAt, lastSeenAt, userAgent, current }]` (never tokens)                                                    |
+| DELETE / POST    | `/api/auth/sessions/:id`, `/sessions/revoke-others`  | sign out one session (404 unless it is yours) / every session except the current one                                                             |
+| GET / PATCH      | `/api/auth/preferences`                              | `{ distanceUnit: mi\|km, timeFormat: 12h\|24h, homeAirportId }` plus the resolved `homeAirport`; defaults `mi`, `12h`, none. Works with auth off |
+| GET              | `/api/config`                                        | Map style URL, lookup status, API docs URL                                                                                                       |
+| GET              | `/api/docs`, `/api/openapi.json`                     | Swagger UI and the raw OpenAPI spec (`ENABLE_API_DOCS`, on by default)                                                                           |
+| GET              | `/api/flights`                                       | `page, pageSize, sort (date, -date, distance, route, airline, flightNumber, aircraft, duration), year, yearFrom, yearTo, airline, cabin, q`      |
+| GET/PATCH/DELETE | `/api/flights/:id`                                   | Detail includes PNR and the raw CSV row                                                                                                          |
+| POST             | `/api/flights`                                       | Times without an offset are local to the relevant airport                                                                                        |
+| GET              | `/api/flights/export?format=csv\|json`               | download all your flights (includes PNR and seat; `Content-Disposition`, `no-store`). CSV uses the Flighty columns, so it imports again          |
+| DELETE           | `/api/flights?confirm=delete-all-flights`            | delete ALL your flights and import batches; returns `{ deleted, deletedImportBatches }`. 400 without the confirmation                            |
+| POST             | `/api/import/preview`                                | multipart field `file`                                                                                                                           |
+| POST             | `/api/import/commit`                                 | `{ previewId }`                                                                                                                                  |
+| GET / DELETE     | `/api/import/batches[/:id]`                          | list / undo                                                                                                                                      |
+| GET              | `/api/map`                                           | routes + airports (same filters)                                                                                                                 |
+| GET              | `/api/map/routes/:a/:b/flights`                      | flights on an undirected route                                                                                                                   |
+| GET              | `/api/stats`                                         | dashboard aggregates (same filters)                                                                                                              |
+| GET              | `/api/filter-options`                                | years, airlines, cabins present in your data                                                                                                     |
+| GET              | `/api/airports/search?q=`, `/api/airlines/search?q=` | typeahead                                                                                                                                        |
+| POST             | `/api/lookup`                                        | `{ flightNumber, date }`. Returns 501 `{ configured: false }` unless a provider is set                                                           |
 
 With `AUTH_REQUIRED=true` every route except `GET /api/health` and `POST /api/auth/login` (and logout) needs the session cookie (401 `unauthenticated`); see [Authentication](#authentication).
 
@@ -190,26 +193,27 @@ With `AUTH_REQUIRED=true` every route except `GET /api/health` and `POST /api/au
 
 ## Design decisions
 
-| Decision                                                                                         | Why                                                                                                                                         | Trade-off                                                                 |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **npm-workspaces monorepo with `packages/shared` consumed as TS source**                         | One set of Zod schemas and response types for API, web and tests, with no build step or publish cycle                                       | Every consumer must compile TS (tsx, Vite and Vitest all do)              |
-| **API runs on `tsx` in dev and in Docker**                                                       | No separate build output to keep in sync during Phase 1                                                                                     | Not a production artifact; see Roadmap                                    |
-| **Prisma for schema and CRUD; tagged raw SQL for aggregates**                                    | Prisma gives migrations and typed CRUD. Stats and map need `GROUP BY`, CTEs and `FILTER` clauses that are clearer in SQL.                   | Filters exist twice (`filtersWhere` / `filtersSql`) and must stay in sync |
-| **Dedupe in the database** (unique + partial expression index) **and in the app** (`naturalKey`) | The DB guarantees idempotency even under races (`ON CONFLICT DO NOTHING`); the app mirror lets the preview report duplicates before writing | Prisma can't model the partial index, so new migrations must be reviewed  |
-| **Preview stored in memory with a TTL**                                                          | Commit doesn't need a re-upload, and it's simple for a single-user, single-process app                                                      | Lost on restart; not multi-instance (Roadmap)                             |
-| **Pure `parseRow` with a preloaded reference index**                                             | A few queries per file instead of per row; the parser is unit-testable without a DB                                                         | Very large files hold the index and rows in memory (capped at 20k rows)   |
-| **Store UTC; interpret naive times in the airport's IANA zone** (`tz-lookup` at seed time)       | Correct across DST and the date line; one rule shared by CSV import and the form                                                            | Requires every airport to have a zone (falls back to UTC)                 |
-| **Derived values computed server-side and stored**                                               | Distance and air time can't drift from their inputs, and aggregates stay cheap                                                              | Changing the formula needs a backfill                                     |
-| **"Effective arrival" = diversion airport**                                                      | Matches where the traveler actually went (distance, map, visits)                                                                            | Scheduled-arrival stats use the planned destination                       |
-| **Own great-circle function (not `@turf/great-circle`) that unwraps longitudes**                 | Turf splits antimeridian arcs into MultiLineStrings; unwrapped lines render as one continuous arc in MapLibre and are easy to test          | A little more code to own                                                 |
-| **Great-circle paths computed by the API**                                                       | The browser gets ready-to-draw GeoJSON, and route collapsing happens in SQL                                                                 | Slightly larger `/api/map` payload                                        |
-| **`maplibre-gl` used directly (no `react-map-gl`)**                                              | Fewer version couplings; the map is one imperative component                                                                                | Manual lifecycle handling (resize, remount guards)                        |
-| **Map style URL served by `/api/config`**                                                        | One env var (`MAP_STYLE_URL`) for all environments, and no Vite rebuild to change it                                                        | One extra request at startup                                              |
-| **Filters in the URL**                                                                           | Shareable, reload-safe views. Map, list and stats read the same parameters through `useFilters`                                             | Filters don't carry over when you switch pages from the nav (Roadmap)     |
-| **Single-hue charts, horizontal bars, no pies, table views, separate light/dark tokens**         | Color-blind safe and readable on mobile, with an accessible fallback for every chart                                                        | Less decorative                                                           |
-| **`resolveUser` middleware + user-scoped DAL**                                                   | Auth only decides who `req.userId` is: the default user, or the user of a valid session cookie. No query changed when login was added       | Every DAL function carries a `userId` parameter                           |
-| **Opt-in, in-app auth: scrypt + DB sessions, no libraries**                                      | Node's built-in `crypto.scrypt` needs no dependency (license rule), and sessions in Postgres can be revoked (logout, password change)       | One lookup per request; login throttle is per process, not shared         |
-| **Pinned, proven major versions**                                                                | Predictable builds while the feature set settles                                                                                            | Upgrades are planned work (Roadmap)                                       |
+| Decision                                                                                         | Why                                                                                                                                                                              | Trade-off                                                                 |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **npm-workspaces monorepo with `packages/shared` consumed as TS source**                         | One set of Zod schemas and response types for API, web and tests, with no build step or publish cycle                                                                            | Every consumer must compile TS (tsx, Vite and Vitest all do)              |
+| **API runs on `tsx` in dev and in Docker**                                                       | No separate build output to keep in sync during Phase 1                                                                                                                          | Not a production artifact; see Roadmap                                    |
+| **Prisma for schema and CRUD; tagged raw SQL for aggregates**                                    | Prisma gives migrations and typed CRUD. Stats and map need `GROUP BY`, CTEs and `FILTER` clauses that are clearer in SQL.                                                        | Filters exist twice (`filtersWhere` / `filtersSql`) and must stay in sync |
+| **Dedupe in the database** (unique + partial expression index) **and in the app** (`naturalKey`) | The DB guarantees idempotency even under races (`ON CONFLICT DO NOTHING`); the app mirror lets the preview report duplicates before writing                                      | Prisma can't model the partial index, so new migrations must be reviewed  |
+| **Preview stored in memory with a TTL**                                                          | Commit doesn't need a re-upload, and it's simple for a single-user, single-process app                                                                                           | Lost on restart; not multi-instance (Roadmap)                             |
+| **Pure `parseRow` with a preloaded reference index**                                             | A few queries per file instead of per row; the parser is unit-testable without a DB                                                                                              | Very large files hold the index and rows in memory (capped at 20k rows)   |
+| **Store UTC; interpret naive times in the airport's IANA zone** (`tz-lookup` at seed time)       | Correct across DST and the date line; one rule shared by CSV import and the form                                                                                                 | Requires every airport to have a zone (falls back to UTC)                 |
+| **Derived values computed server-side and stored**                                               | Distance and air time can't drift from their inputs, and aggregates stay cheap                                                                                                   | Changing the formula needs a backfill                                     |
+| **"Effective arrival" = diversion airport**                                                      | Matches where the traveler actually went (distance, map, visits)                                                                                                                 | Scheduled-arrival stats use the planned destination                       |
+| **Own great-circle function (not `@turf/great-circle`) that unwraps longitudes**                 | Turf splits antimeridian arcs into MultiLineStrings; unwrapped lines render as one continuous arc in MapLibre and are easy to test                                               | A little more code to own                                                 |
+| **Great-circle paths computed by the API**                                                       | The browser gets ready-to-draw GeoJSON, and route collapsing happens in SQL                                                                                                      | Slightly larger `/api/map` payload                                        |
+| **`maplibre-gl` used directly (no `react-map-gl`)**                                              | Fewer version couplings; the map is one imperative component                                                                                                                     | Manual lifecycle handling (resize, remount guards)                        |
+| **Map style URL served by `/api/config`**                                                        | One env var (`MAP_STYLE_URL`) for all environments, and no Vite rebuild to change it                                                                                             | One extra request at startup                                              |
+| **Filters in the URL**                                                                           | Shareable, reload-safe views. Map, list and stats read the same parameters through `useFilters`                                                                                  | Filters don't carry over when you switch pages from the nav (Roadmap)     |
+| **Single-hue charts, horizontal bars, no pies, table views, separate light/dark tokens**         | Color-blind safe and readable on mobile, with an accessible fallback for every chart                                                                                             | Less decorative                                                           |
+| **`resolveUser` middleware + user-scoped DAL**                                                   | Auth only decides who `req.userId` is: the default user, or the user of a valid session cookie. No query changed when login was added                                            | Every DAL function carries a `userId` parameter                           |
+| **Opt-in, in-app auth: scrypt + DB sessions, no libraries**                                      | Node's built-in `crypto.scrypt` needs no dependency (license rule), and sessions in Postgres can be revoked (logout, password change)                                            | One lookup per request; login throttle is per process, not shared         |
+| **Explicit preference columns on `users`, not a JSON blob**                                      | `home_airport_id` needs a real foreign key (`ON DELETE SET NULL`), and CHECK constraints keep the unit and clock values to a known set with no app-side migration of stored JSON | A new preference is a small migration                                     |
+| **Pinned, proven major versions**                                                                | Predictable builds while the feature set settles                                                                                                                                 | Upgrades are planned work (Roadmap)                                       |
 
 ## Authentication
 
@@ -330,6 +334,29 @@ The analysis recommends **AeroDataBox** (free RapidAPI tier) as primary and **Fl
 
 ## Assumptions
 
+**Preferences, export and delete-all**
+
+- **Preferences are display-only.** Flights stay stored in miles and UTC, derived values (distance, air
+  time) are computed server-side as before, and `/api/stats` still returns miles. The web app converts
+  for display. They work with `AUTH_REQUIRED` off (they belong to the default user).
+- **The default clock is 12-hour**, so times in the flight detail look different from before this
+  feature (they were always 24-hour). Choose 24-hour on the Profile page to get the old look. The
+  date/time inputs in the flight form follow the browser's own locale, not this setting.
+- **Home airport** only pre-fills the departure airport of a _new_ flight (once; you can clear it).
+- **Export is the user's own data, detail-level.** It includes PNR and seat, is sent with
+  `Cache-Control: no-store` and `Content-Disposition: attachment`, and is never logged. It is loaded in
+  memory in one query, which is fine at personal scale (the importer caps files at 20k rows).
+- **CSV round trip.** Columns and headers are the Flighty ones, times are written as UTC instants
+  (`…Z`, which the importer honors), airports and airlines as IATA (else ICAO) codes. Re-importing an
+  export recognizes every row as a duplicate (Flighty ID, or the natural key for manual flights), and
+  importing it into an empty log rebuilds the same flights. Not preserved: derived values (recomputed),
+  the original raw CSV row (`source_raw`; only the JSON export has it), and the text that was in the
+  Airline cell when the airline resolved. Cells are written as-is, so a note starting with `=` is a
+  formula if you open the CSV in a spreadsheet; guarding against that would change the data.
+- **Delete-all is permanent.** It removes the user's flights and import batches in one transaction
+  (never another user's, never reference data). There is no undo or soft delete, so export first. Any
+  unsaved import preview is unaffected and could still be committed.
+
 **Flighty CSV**
 
 - **Times without an offset** are wall-clock timefiorde relevant airport. Gate departure and
@@ -432,6 +459,9 @@ row written differently) and 2 invalid (unknown airport `ZZX`, unparseable date)
 **Platform**
 
 - [x] Authentication: email + password with database sessions (done; see [Authentication](#authentication)).
+- [x] Per-user preferences (distance unit, clock, home airport), data export (CSV/JSON) and delete-all
+      (done; see [Assumptions](#assumptions)).
+- [ ] Undo for delete-all (soft delete or an automatic export), and streaming export for very large logs.
 - [ ] Later auth options: OIDC (would add an `oidc_subject` column), password reset, MFA/passkeys.
 - [ ] Production build: compile the API (or bundle with esbuild), serve `apps/web/dist` statically,
       and add a production Dockerfile and compose profile.
@@ -443,7 +473,7 @@ row written differently) and 2 invalid (unknown airport `ZZX`, unparseable date)
 - [ ] Split the map bundle further (MapLibre is about 1 MB minified).
 - [ ] Carry active filters across pages when navigating (nav links currently drop the query string).
 
-**Product ideas** (Phase 1 out-of-scope list): sharing / public profiles, CSV/GeoJSON export, native
+**Product ideas** (Phase 1 out-of-scope list): sharing / public profiles, GeoJSON export, native
 apps, email/PDF ticket parsing, numeric sorting of flight numbers, re-normalizing existing rows when
 normalization rules change.
 

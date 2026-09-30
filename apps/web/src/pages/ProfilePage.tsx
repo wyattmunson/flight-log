@@ -1,19 +1,28 @@
-import { useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import {
   DISPLAY_NAME_MAX_LENGTH,
+  type AirportSummary,
+  type DistanceUnit,
+  type TimeFormat,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from '@flight-log/shared';
 import { ApiError } from '../api/client';
 import {
+  useAirportSearch,
   useChangeEmail,
   useChangePassword,
+  useDeleteAllFlights,
   useMe,
+  usePreferences,
   useRevokeOtherSessions,
   useRevokeSession,
   useSessions,
+  useUpdatePreferences,
   useUpdateProfile,
 } from '../api/hooks';
+import { Combobox } from '../components/Combobox';
+import { Drawer } from '../components/Drawer';
 import { ErrorState, Spinner } from '../components/States';
 import { deviceLabel } from '../lib/userAgent';
 
@@ -104,6 +113,279 @@ function NameSection({ initial }: { initial: string }) {
           {update.isPending ? 'Saving…' : 'Save name'}
         </button>
       </form>
+    </section>
+  );
+}
+
+const airportLabel = (a: AirportSummary) => `${a.iata ?? a.icao} · ${a.name}`;
+
+function RadioGroup<T extends string>({
+  legend,
+  name,
+  value,
+  onChange,
+  options,
+}: {
+  legend: string;
+  name: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+}) {
+  return (
+    <fieldset>
+      <legend className="label">{legend}</legend>
+      <div className="flex flex-wrap gap-x-6 gap-y-2">
+        {options.map((o) => (
+          <label key={o.value} className="inline-flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name={name}
+              value={o.value}
+              checked={value === o.value}
+              onChange={() => onChange(o.value)}
+            />
+            {o.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function PreferencesSection() {
+  const prefs = usePreferences();
+  const update = useUpdatePreferences();
+  const [unit, setUnit] = useState<DistanceUnit | null>(null);
+  const [clock, setClock] = useState<TimeFormat | null>(null);
+  // `undefined` = untouched; null = cleared; otherwise the chosen airport.
+  const [home, setHome] = useState<AirportSummary | null | undefined>(undefined);
+
+  if (prefs.isPending) return <Spinner label="Loading preferences…" />;
+  if (prefs.isError) return <ErrorState error={prefs.error} onRetry={() => prefs.refetch()} />;
+
+  const saved = prefs.data;
+  const unitValue = unit ?? saved.distanceUnit;
+  const clockValue = clock ?? saved.timeFormat;
+  const homeValue = home === undefined ? saved.homeAirport : home;
+  const dirty =
+    unitValue !== saved.distanceUnit ||
+    clockValue !== saved.timeFormat ||
+    (homeValue?.id ?? null) !== saved.homeAirportId;
+
+  const fieldErrors = update.error instanceof ApiError ? update.error.fieldErrors : {};
+  const generalError = generalMessage(update.error, fieldErrors);
+  const touch = () => update.isSuccess && update.reset();
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    update.mutate(
+      { distanceUnit: unitValue, timeFormat: clockValue, homeAirportId: homeValue?.id ?? null },
+      {
+        onSuccess: () => {
+          setUnit(null);
+          setClock(null);
+          setHome(undefined);
+        },
+      },
+    );
+  };
+
+  return (
+    <section aria-labelledby="prefs-heading">
+      <h2 id="prefs-heading" className="mb-2 text-lg font-semibold">
+        Preferences
+      </h2>
+      <form onSubmit={submit} className="card space-y-4">
+        <p className="text-sm muted">
+          These only change how values are shown. Your flights are still stored in miles and UTC.
+        </p>
+        {update.isSuccess && (
+          <p role="status" className={successBox}>
+            Preferences saved.
+          </p>
+        )}
+        {generalError && (
+          <p role="alert" className={errorBox}>
+            {generalError}
+          </p>
+        )}
+        <RadioGroup
+          legend="Distance"
+          name="distanceUnit"
+          value={unitValue}
+          onChange={(v) => {
+            touch();
+            setUnit(v);
+          }}
+          options={[
+            { value: 'mi', label: 'Miles' },
+            { value: 'km', label: 'Kilometers' },
+          ]}
+        />
+        <RadioGroup
+          legend="Time"
+          name="timeFormat"
+          value={clockValue}
+          onChange={(v) => {
+            touch();
+            setClock(v);
+          }}
+          options={[
+            { value: '12h', label: '12-hour (2:30 PM)' },
+            { value: '24h', label: '24-hour (14:30)' },
+          ]}
+        />
+        <div>
+          <Combobox<AirportSummary>
+            key={homeValue?.id ?? 'none'}
+            label="Home airport"
+            value={homeValue}
+            onChange={(a) => {
+              touch();
+              setHome(a);
+            }}
+            useSearch={useAirportSearch}
+            getKey={(a) => a.id}
+            getLabel={airportLabel}
+            renderOption={(a) => (
+              <span>
+                <span className="font-semibold">{a.iata ?? a.icao}</span> {a.name}
+                <span className="block text-xs text-stone-500">
+                  {[a.city, a.country].filter(Boolean).join(', ')}
+                </span>
+              </span>
+            )}
+            placeholder="SFO, London, Heathrow…"
+            error={fieldErrors.homeAirportId}
+            hint="New flights start from here."
+          />
+          {homeValue && (
+            <button
+              type="button"
+              className="mt-2 text-sm underline"
+              onClick={() => {
+                touch();
+                setHome(null);
+              }}
+            >
+              Clear home airport
+            </button>
+          )}
+        </div>
+        <button type="submit" className="btn-primary" disabled={update.isPending || !dirty}>
+          {update.isPending ? 'Saving…' : 'Save preferences'}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function DataSection() {
+  return (
+    <section aria-labelledby="data-heading">
+      <h2 id="data-heading" className="mb-2 text-lg font-semibold">
+        Your data
+      </h2>
+      <div className="card space-y-3">
+        <p className="text-sm">
+          Download every flight in your log. The export includes booking references (PNR) and seats,
+          so keep the file private. The CSV uses the Flighty columns with UTC times, so it can be
+          imported again.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <a className="btn-secondary" href="/api/flights/export?format=csv" download>
+            Download CSV
+          </a>
+          <a className="btn-secondary" href="/api/flights/export?format=json" download>
+            Download JSON
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const DELETE_PHRASE = 'delete my flights';
+
+function DangerZone() {
+  const remove = useDeleteAllFlights();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const matches = typed.trim().toLowerCase() === DELETE_PHRASE;
+
+  // Must be stable: Drawer re-focuses its panel whenever `onClose` changes, which would steal focus
+  // from the input on every keystroke.
+  const { reset } = remove;
+  const close = useCallback(() => {
+    setOpen(false);
+    setTyped('');
+    reset();
+  }, [reset]);
+  const confirm = (e: FormEvent) => {
+    e.preventDefault();
+    if (!matches) return;
+    remove.mutate(undefined, { onSuccess: () => setOpen(false) });
+  };
+  const result = remove.data;
+
+  return (
+    <section aria-labelledby="danger-heading">
+      <h2 id="danger-heading" className="mb-2 text-lg font-semibold text-red-700 dark:text-red-300">
+        Danger zone
+      </h2>
+      <div className="card space-y-3 border-red-300 dark:border-red-900">
+        {result && (
+          <p role="status" className={successBox}>
+            Deleted {result.deleted} {result.deleted === 1 ? 'flight' : 'flights'} and{' '}
+            {result.deletedImportBatches} import{' '}
+            {result.deletedImportBatches === 1 ? 'record' : 'records'}.
+          </p>
+        )}
+        <p className="text-sm">
+          Permanently delete every flight and import record in your log. This cannot be undone, so
+          download your data first.
+        </p>
+        <button type="button" className="btn-danger" onClick={() => setOpen(true)}>
+          Delete all flights…
+        </button>
+      </div>
+      <Drawer open={open} onClose={close} title="Delete all flights">
+        <form onSubmit={confirm} className="space-y-4 pr-10">
+          <h2 className="text-xl font-semibold">Delete all flights?</h2>
+          <p className="text-sm">
+            This permanently removes all of your flights and import history. Your account and
+            preferences stay.
+          </p>
+          {remove.error && (
+            <p role="alert" className={errorBox}>
+              {remove.error.message}
+            </p>
+          )}
+          <div>
+            <label htmlFor="confirmDelete" className="label">
+              Type <strong>{DELETE_PHRASE}</strong> to confirm
+            </label>
+            <input
+              id="confirmDelete"
+              className="input"
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" className="btn-danger" disabled={!matches || remove.isPending}>
+              {remove.isPending ? 'Deleting…' : 'Delete all flights'}
+            </button>
+            <button type="button" className="btn-secondary" onClick={close}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Drawer>
     </section>
   );
 }
@@ -432,6 +714,7 @@ export function ProfilePage() {
       <h1 className="text-xl font-semibold">Profile</h1>
       {user.email && <p className="-mt-6 truncate text-sm muted">{user.email}</p>}
       <NameSection initial={user.displayName} />
+      <PreferencesSection />
       {authRequired ? (
         <>
           <EmailSection email={user.email} />
@@ -444,6 +727,8 @@ export function ProfilePage() {
           server&apos;s administrator).
         </p>
       )}
+      <DataSection />
+      <DangerZone />
     </div>
   );
 }

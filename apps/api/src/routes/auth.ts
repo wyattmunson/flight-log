@@ -6,6 +6,7 @@ import {
   ChangePasswordInputSchema,
   LoginInputSchema,
   SessionIdParamSchema,
+  UpdatePreferencesInputSchema,
   UpdateProfileInputSchema,
 } from '@flight-log/shared';
 import {
@@ -26,7 +27,14 @@ import {
   setSessionCookie,
 } from '../auth/sessions';
 import { createThrottle } from '../auth/throttle';
-import { findUserByEmail, findUserById, updateUser } from '../dal/auth';
+import {
+  findUserByEmail,
+  findUserById,
+  getPreferences,
+  updatePreferences,
+  updateUser,
+} from '../dal/auth';
+import { getAirportsByIds } from '../dal/reference';
 import type { AuthUser } from '../dal/auth';
 import { env } from '../env';
 import { AppError, notFound } from '../http/errors';
@@ -139,6 +147,30 @@ export function authRouter() {
       if (!(await findUserById(req.userId)))
         throw new AppError(401, 'unauthenticated', 'Sign in required');
       res.json(toAuthMe(await updateUser(req.userId, { displayName })));
+    }),
+  );
+
+  // Display preferences work with AUTH_REQUIRED off too (they belong to the default user then).
+  router.get(
+    '/preferences',
+    route(async (req, res) => {
+      const prefs = await getPreferences(req.userId);
+      if (!prefs) throw new AppError(401, 'unauthenticated', 'Sign in required');
+      res.json(prefs);
+    }),
+  );
+
+  router.patch(
+    '/preferences',
+    route(async (req, res) => {
+      const input = UpdatePreferencesInputSchema.parse(req.body);
+      if (input.homeAirportId && (await getAirportsByIds([input.homeAirportId])).length === 0)
+        throw new AppError(400, 'validation_error', 'Request validation failed', [
+          { path: 'homeAirportId', message: 'Unknown airport' },
+        ]);
+      if (!(await findUserById(req.userId)))
+        throw new AppError(401, 'unauthenticated', 'Sign in required');
+      res.json(await updatePreferences(req.userId, input));
     }),
   );
 

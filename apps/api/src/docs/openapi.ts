@@ -266,6 +266,36 @@ export const openApiSpec = {
         },
       },
     },
+    '/api/auth/preferences': {
+      get: {
+        tags: ['Auth'],
+        summary: 'Display preferences',
+        description:
+          "Per-user distance unit, time format and home airport (defaults `mi`, `12h`, none). Works with `AUTH_REQUIRED` off (the default user's). They only affect how the web app displays values: stored miles and UTC times, derived values and the stats contract never change.",
+        responses: {
+          '200': {
+            description: 'Preferences',
+            headers: { ...noStore },
+            content: json(ref('Preferences')),
+          },
+        },
+      },
+      patch: {
+        tags: ['Auth'],
+        summary: 'Update display preferences',
+        description:
+          'Partial update; at least one field. `homeAirportId: null` clears it; an unknown airport is a 400 on `homeAirportId`.',
+        requestBody: { required: true, content: json(ref('UpdatePreferencesInput')) },
+        responses: {
+          '200': {
+            description: 'Updated',
+            headers: { ...noStore },
+            content: json(ref('Preferences')),
+          },
+          '400': validation,
+        },
+      },
+    },
     '/api/auth/password': {
       post: {
         tags: ['Auth'],
@@ -390,6 +420,50 @@ export const openApiSpec = {
           content: json({ $ref: '#/components/schemas/FlightInput' }),
         },
         responses: { '201': ok('Created', ref('FlightDetail')), '400': validation },
+      },
+      delete: {
+        tags: ['Flights'],
+        summary: 'Delete ALL of your flights',
+        description:
+          "Removes every flight AND import batch of the signed-in user (nobody else's), then returns the counts. Body-less; refuses unless `confirm=delete-all-flights` is present, so a stray request cannot empty the log. Cannot be undone; export first.",
+        parameters: [
+          {
+            name: 'confirm',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', enum: ['delete-all-flights'] },
+          },
+        ],
+        responses: {
+          '200': ok('What was deleted', ref('DeleteAllFlightsResult')),
+          '400': validation,
+        },
+      },
+    },
+    '/api/flights/export': {
+      get: {
+        tags: ['Flights'],
+        summary: 'Download all of your flights (CSV or JSON)',
+        description:
+          "Detail-level export of the signed-in user's own data, so it INCLUDES PNR and seat. Sent as an attachment (`Content-Disposition`) with `Cache-Control: no-store`, and never logged. `csv` (default) uses the Flighty import columns, with times as UTC instants, so the file can be imported again: every row is then recognized as a duplicate. `json` is the full `FlightDetail` of each flight. Server-derived values (distance, air time) are not in the CSV; the importer recomputes them.",
+        parameters: [query('format', { type: 'string', enum: ['csv', 'json'], default: 'csv' })],
+        responses: {
+          '200': {
+            description: 'The file',
+            headers: {
+              'Content-Disposition': {
+                description: 'attachment; filename="flight-log-DATE.ext"',
+                schema: str,
+              },
+              'Cache-Control': { description: 'Always `no-store`', schema: str },
+            },
+            content: {
+              'text/csv': { schema: { type: 'string' } },
+              'application/json': { schema: ref('FlightsExport') },
+            },
+          },
+          '400': validation,
+        },
       },
     },
     '/api/flights/{id}': {
@@ -592,6 +666,23 @@ export const openApiSpec = {
       LoginInput: obj({
         email: { type: 'string', maxLength: 254, example: 'traveler@example.com' },
         password: { type: 'string', maxLength: 1024, format: 'password' },
+      }),
+      UpdatePreferencesInput: obj({
+        distanceUnit: { type: 'string', enum: ['mi', 'km'] },
+        timeFormat: { type: 'string', enum: ['12h', '24h'] },
+        homeAirportId: nullable({ type: 'integer', minimum: 1 }),
+      }),
+      Preferences: obj({
+        distanceUnit: { type: 'string', enum: ['mi', 'km'] },
+        timeFormat: { type: 'string', enum: ['12h', '24h'] },
+        homeAirportId: nint,
+        homeAirport: nullable(ref('AirportSummary')),
+      }),
+      DeleteAllFlightsResult: obj({ deleted: int, deletedImportBatches: int }),
+      FlightsExport: obj({
+        exportedAt: dateTime('When the export was made.'),
+        count: int,
+        flights: arrayOf(ref('FlightDetail')),
       }),
       UpdateProfileInput: obj({ displayName: { type: 'string', minLength: 1, maxLength: 80 } }),
       ChangeEmailInput: obj({

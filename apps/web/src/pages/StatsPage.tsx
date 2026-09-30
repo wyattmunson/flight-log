@@ -6,7 +6,7 @@ import {
   type Stats,
   type StatsFlightRef,
 } from '@flight-log/shared';
-import { useStats } from '../api/hooks';
+import { useDisplayPrefs, useStats } from '../api/hooks';
 import { ChartCard, ColumnChart, HBarChart, TimeLine } from '../components/charts';
 import { FilterBar } from '../components/FilterBar';
 import { SortableTable } from '../components/SortableTable';
@@ -25,26 +25,13 @@ import { useFilters } from '../lib/useFilters';
 
 const TOP_N = 10;
 
-function readUnit(): DistanceUnit {
-  try {
-    return localStorage.getItem('distanceUnit') === 'km' ? 'km' : 'mi';
-  } catch {
-    return 'mi';
-  }
-}
-
 export function StatsPage() {
   const { filters, active } = useFilters();
   const stats = useStats(filters);
-  const [unit, setUnitState] = useState<DistanceUnit>(readUnit);
-  const setUnit = (u: DistanceUnit) => {
-    setUnitState(u);
-    try {
-      localStorage.setItem('distanceUnit', u);
-    } catch {
-      /* preference only */
-    }
-  };
+  // The saved preference (Profile) is the default; the toggle overrides it for this visit only.
+  const { distanceUnit } = useDisplayPrefs();
+  const [override, setUnit] = useState<DistanceUnit | null>(null);
+  const unit = override ?? distanceUnit;
 
   return (
     <div>

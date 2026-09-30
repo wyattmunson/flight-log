@@ -166,6 +166,27 @@ export async function deleteFlight(userId: string, id: string): Promise<boolean>
   return count > 0;
 }
 
+/** Every flight of the user, oldest first, with the relations needed for detail-level export. */
+export function listAllFlights(userId: string): Promise<FlightWithRelations[]> {
+  return prisma.flight.findMany({
+    where: { userId },
+    include: flightInclude,
+    orderBy: [{ flightDate: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+  });
+}
+
+/**
+ * Removes all of the user's flights and import batches (batches only exist to describe imports, and
+ * "undo" of an emptied batch is meaningless). Reference data and other users are untouched.
+ */
+export function deleteAllFlights(userId: string) {
+  return prisma.$transaction(async (tx) => {
+    const flights = await tx.flight.deleteMany({ where: { userId } });
+    const batches = await tx.importBatch.deleteMany({ where: { userId } });
+    return { deleted: flights.count, deletedImportBatches: batches.count };
+  });
+}
+
 /** Flights (not canceled) on an undirected route, as drawn on the map. */
 export async function routeFlights(
   userId: string,

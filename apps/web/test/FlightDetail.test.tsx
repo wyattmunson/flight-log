@@ -1,6 +1,7 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FlightDetail } from '@flight-log/shared';
 import { FlightDetailView } from '../src/components/FlightDetail';
 
@@ -63,31 +64,63 @@ const flight: FlightDetail = {
   updatedAt: '2024-01-01T00:00:00.000Z',
 };
 
-describe('FlightDetailView', () => {
-  it('shows times in each airport’s local zone, across the date line', () => {
-    render(
+type Prefs = { distanceUnit: 'mi' | 'km'; timeFormat: '12h' | '24h' };
+
+/** Renders the detail with the given saved preferences answered by a stubbed API. */
+function renderDetail(prefs: Prefs = { distanceUnit: 'mi', timeFormat: '12h' }) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ...prefs, homeAirportId: null, homeAirport: null }), {
+          status: 200,
+        }),
+    ),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
       <MemoryRouter>
         <FlightDetailView flight={flight} onDelete={vi.fn()} deleting={false} />
-      </MemoryRouter>,
-    );
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('FlightDetailView', () => {
+  it('shows times in each airport’s local zone, across the date line (12-hour by default)', () => {
+    renderDetail();
     const takeoff = screen.getByRole('row', { name: /Takeoff/ });
-    expect(within(takeoff).getByText('22:30')).toBeInTheDocument();
+    expect(within(takeoff).getByText('10:30 PM')).toBeInTheDocument();
     expect(within(takeoff).getByText('PDT')).toBeInTheDocument();
     expect(within(takeoff).getByText('Mon, Jul 1 2024')).toBeInTheDocument();
     const landing = screen.getByRole('row', { name: /Landing/ });
-    expect(within(landing).getByText('06:30')).toBeInTheDocument();
+    expect(within(landing).getByText('6:30 AM')).toBeInTheDocument();
     expect(within(landing).getByText('Wed, Jul 3 2024')).toBeInTheDocument();
   });
 
+  it('uses the 24-hour clock when that preference is saved (zones are unchanged)', async () => {
+    renderDetail({ distanceUnit: 'mi', timeFormat: '24h' });
+    const takeoff = screen.getByRole('row', { name: /Takeoff/ });
+    await waitFor(() => expect(within(takeoff).getByText('22:30')).toBeInTheDocument());
+    expect(within(takeoff).getByText('PDT')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('row', { name: /Landing/ })).getByText('06:30'),
+    ).toBeInTheDocument();
+  });
+
   it('shows the PNR (detail view only) and computed values', () => {
-    render(
-      <MemoryRouter>
-        <FlightDetailView flight={flight} onDelete={vi.fn()} deleting={false} />
-      </MemoryRouter>,
-    );
+    renderDetail();
     expect(screen.getByText('SECRET1')).toBeInTheDocument();
     expect(screen.getByText('7,494 mi · 12,061 km')).toBeInTheDocument();
     expect(screen.getByText('15h 00m')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Edit' })).toHaveAttribute('href', '/flights/f1/edit');
+  });
+
+  it('leads with kilometers when that preference is saved; the stored miles are untouched', async () => {
+    renderDetail({ distanceUnit: 'km', timeFormat: '12h' });
+    expect(await screen.findByText('12,061 km · 7,494 mi')).toBeInTheDocument();
   });
 });

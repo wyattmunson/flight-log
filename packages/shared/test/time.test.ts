@@ -126,6 +126,15 @@ describe('display helpers', () => {
     expect(p.abbr).toBe('EDT');
   });
 
+  it('renders 12-hour time on request, and keeps 24-hour as the default', () => {
+    expect(toLocalParts('2023-06-01T23:00:00Z', 'America/New_York', '12h').time).toBe('7:00 PM');
+    expect(toLocalParts('2023-06-01T04:05:00Z', 'UTC', '12h').time).toBe('4:05 AM');
+    expect(toLocalParts('2023-06-01T00:00:00Z', 'UTC', '12h').time).toBe('12:00 AM');
+    expect(toLocalParts('2023-06-01T12:30:00Z', 'UTC', '12h').time).toBe('12:30 PM');
+    expect(toLocalParts('2023-06-01T23:00:00Z', 'America/New_York', '24h').time).toBe('19:00');
+    expect(toLocalParts('2023-06-01T23:00:00Z', 'America/New_York').time).toBe('19:00');
+  });
+
   it('round-trips a datetime-local input value', () => {
     expect(toLocalInputValue('2024-07-02T20:30:00Z', 'Australia/Sydney')).toBe('2024-07-03T06:30');
     expect(toLocalInputValue(null, 'UTC')).toBe('');

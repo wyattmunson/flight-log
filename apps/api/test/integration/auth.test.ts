@@ -662,6 +662,113 @@ describe('sessions', () => {
   });
 });
 
+describe('per-user export, delete-all and preferences', () => {
+  afterEach(async () => {
+    await prisma.user.updateMany({
+      where: { id: { in: [ALICE.id, BOB.id] } },
+      data: { distanceUnit: 'mi', timeFormat: '12h', homeAirportId: null },
+    });
+  });
+
+  const both = async () => {
+    const alice = client();
+    const bob = client();
+    await login(alice).expect(200);
+    await login(bob, BOB).expect(200);
+    await alice
+      .post('/api/flights')
+      .send({ ...flight, pnr: 'ALICEPNR' })
+      .expect(201);
+    await alice
+      .post('/api/flights')
+      .send({ ...flight, flightDate: '2023-06-02' })
+      .expect(201);
+    await bob
+      .post('/api/flights')
+      .send({ ...flight, flightNumber: 'AA 777', pnr: 'BOBPNR' })
+      .expect(201);
+    return { alice, bob };
+  };
+
+  it('exports only the signed-in user’s flights, and needs a session', async () => {
+    const { alice, bob } = await both();
+    await client().get('/api/flights/export').expect(401);
+
+    const a = await alice.get('/api/flights/export?format=csv').expect(200);
+    expect(a.text).toContain('ALICEPNR');
+    expect(a.text).not.toContain('BOBPNR');
+    expect(a.headers['cache-control']).toBe('no-store');
+    const b = await bob.get('/api/flights/export?format=json').expect(200);
+    expect(b.body.count).toBe(1);
+    expect(JSON.stringify(b.body)).toContain('BOBPNR');
+    expect(JSON.stringify(b.body)).not.toContain('ALICEPNR');
+  });
+
+  it('delete-all removes only the caller’s flights and batches, never the other user’s', async () => {
+    const { alice, bob } = await both();
+    const importRes = await importFixture(alice);
+    const bobImport = await importFixture(bob);
+    expect(bobImport.summary.imported).toBeGreaterThan(0);
+    const bobBefore = (await bob.get('/api/flights')).body.total;
+    const bobBatches = (await bob.get('/api/import/batches')).body.length;
+
+    await client().delete('/api/flights?confirm=delete-all-flights').expect(401);
+    await alice.delete('/api/flights').expect(400); // no confirmation
+    expect((await alice.get('/api/flights')).body.total).toBeGreaterThan(0);
+
+    const res = await alice.delete('/api/flights?confirm=delete-all-flights').expect(200);
+    expect(res.body.deleted).toBe(importRes.summary.imported + 2);
+    expect(res.body.deletedImportBatches).toBe(1);
+    expect((await alice.get('/api/flights')).body.total).toBe(0);
+    expect((await alice.get('/api/import/batches')).body).toEqual([]);
+
+    expect((await bob.get('/api/flights')).body.total).toBe(bobBefore);
+    expect((await bob.get('/api/import/batches')).body).toHaveLength(bobBatches);
+    expect(await prisma.flight.count({ where: { userId: BOB.id } })).toBe(bobBefore);
+    // ...and Alice's own delete of Bob's flight id still says not found.
+    const bobFlight = (await bob.get('/api/flights?pageSize=1')).body.items[0];
+    await alice.delete(`/api/flights/${bobFlight.id}`).expect(404);
+  });
+
+  it('delete-all is CSRF protected like every other write', async () => {
+    const { alice } = await both();
+    await request(createApp())
+      .delete('/api/flights?confirm=delete-all-flights')
+      .set('Origin', 'https://evil.example')
+      .set(
+        'Cookie',
+        ((await login(client()).expect(200)).headers['set-cookie'] as unknown as string[]) ?? [],
+      )
+      .expect(403);
+    expect((await alice.get('/api/flights')).body.total).toBe(2);
+  });
+
+  it('keeps preferences per user', async () => {
+    const alice = client();
+    const bob = client();
+    await login(alice).expect(200);
+    await login(bob, BOB).expect(200);
+    await client().get('/api/auth/preferences').expect(401);
+    await client().patch('/api/auth/preferences').send({ distanceUnit: 'km' }).expect(401);
+
+    await alice
+      .patch('/api/auth/preferences')
+      .send({ distanceUnit: 'km', timeFormat: '24h', homeAirportId: AIRPORT_ID.JFK })
+      .expect(200);
+    expect((await bob.get('/api/auth/preferences')).body).toEqual({
+      distanceUnit: 'mi',
+      timeFormat: '12h',
+      homeAirportId: null,
+      homeAirport: null,
+    });
+    expect((await alice.get('/api/auth/preferences')).body).toMatchObject({
+      distanceUnit: 'km',
+      timeFormat: '24h',
+      homeAirport: { iata: 'JFK' },
+    });
+  });
+});
+
 describe('CSRF guard', () => {
   const app = createApp();
   const body = { email: ALICE.email, password: ALICE.password };

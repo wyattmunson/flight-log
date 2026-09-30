@@ -4,7 +4,9 @@ import {
   toLocalParts,
   type AirlineSummary,
   type AirportSummary,
+  PREFERENCE_DEFAULTS,
   type DistanceUnit,
+  type TimeFormat,
 } from '@flight-log/shared';
 
 const nf0 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -64,9 +66,13 @@ export function countryName(code: string | null | undefined) {
 }
 
 /** "Jan 15 · 11:38 PST" in the airport's local zone. */
-export function formatLocalTime(utc: string | null, zone: string | null | undefined) {
+export function formatLocalTime(
+  utc: string | null,
+  zone: string | null | undefined,
+  timeFormat: TimeFormat = PREFERENCE_DEFAULTS.timeFormat,
+) {
   if (!utc) return null;
-  const p = toLocalParts(utc, zone);
+  const p = toLocalParts(utc, zone, timeFormat);
   return { ...p, label: `${p.time} ${p.abbr}` };
 }
 

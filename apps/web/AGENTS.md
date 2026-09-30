@@ -17,7 +17,7 @@ src/components/        Layout (nav + attribution footer), FilterBar, Combobox (A
                        Drawer (dialog), States (Spinner/ErrorState/EmptyState/NoFlightsYet),
                        FlightDetail, FlightMap, SortableTable, charts (ChartCard/HBarChart/ColumnChart/TimeLine)
 src/pages/             MapPage, FlightsPage (+ drawer via ?flight=<id>), FlightFormPage (new + :id/edit),
-                       ImportPage, StatsPage, ProfilePage (name + password sections), LoginPage
+                       ImportPage, StatsPage, ProfilePage (name, preferences, email, password, sessions, export, danger zone), LoginPage
 test/                  Vitest + React Testing Library (jsdom)
 ```
 
@@ -35,13 +35,13 @@ test/                  Vitest + React Testing Library (jsdom)
 - **Accessibility:** real `<button>`/`<label>`, `aria-sort` on sortable headers, `aria-label` on
   unlabeled controls, keyboard-operable comboboxes. Don't convey meaning by color alone.
 - **Privacy:** only `FlightDetailView` and the edit form show PNR and seat.
-- **Time display:** use `formatLocalTime(utc, airport.timezone)` / `toLocalParts` (shared). The zone
+- **Time display:** use `formatLocalTime(utc, airport.timezone, timeFormat)` / `toLocalParts` (shared). The zone
   rule for arrival _actuals_ (diversion airport) must match the API. See `zoneFor` in
   `FlightFormPage.tsx` and in `FlightDetail.tsx`.
 
 ## Auth
 
-- `useMe` / `useLogin` / `useLogout` / `useUpdateProfile` / `useChangeEmail` / `useSessions` / `useRevokeSession` / `useRevokeOtherSessions` / `useChangePassword` are in `hooks.ts`. Login and logout clear the whole
+- `useMe` / `useLogin` / `useLogout` / `usePreferences` / `useDisplayPrefs` / `useUpdatePreferences` / `useDeleteAllFlights` / `useUpdateProfile` / `useChangeEmail` / `useSessions` / `useRevokeSession` / `useRevokeOtherSessions` / `useChangePassword` are in `hooks.ts`. Login and logout clear the whole
   query cache. `RequireAuth` shows the Spinner while `/auth/me` loads, sends a 401 to `/login?next=…`, and
   renders the app with no login UI when `authRequired` is false.
 - Decide "signed in" from `me.status === 'success'`, never `me.data`: after a failed re-check TanStack Query
@@ -49,6 +49,13 @@ test/                  Vitest + React Testing Library (jsdom)
 - ProfilePage sections other than Name (Email, Password, Active sessions) render only when
   `authRequired`; the sessions query is not even issued otherwise. Revoking the _current_ session is not
   offered in the UI (that is Sign out), and "Sign out other devices" needs the inline confirmation.
+- **Preferences are display-only.** Convert at render time with `useDisplayPrefs()`:
+  `formatDistance(miles, unit)` and `formatLocalTime(utc, zone, timeFormat)`. The API keeps miles and
+  UTC. New flights start at `homeAirport` (FlightFormPage, applied once). Anything passed to `Drawer`
+  as `onClose` must be stable (`useCallback`), or the drawer steals focus from inputs on every render.
+- Export is a plain `<a href="/api/flights/export?format=…" download>` (same-origin, cookie), not a fetch.
+  Delete-all needs the typed phrase in the UI _and_ the API's `confirm` query token, then
+  `useInvalidateFlightData()`.
 - Any `next` target must go through `safeNextPath()` (single leading `/`, no `//`, no backslash).
 - The dev proxy keeps `changeOrigin: false`, so the API's CSRF check sees the browser's `Host`.
 

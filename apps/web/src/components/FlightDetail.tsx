@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import type { FlightDetail as Flight, FlightTimeField } from '@flight-log/shared';
+import type { FlightDetail as Flight, FlightTimeField, TimeFormat } from '@flight-log/shared';
+import { useDisplayPrefs } from '../api/hooks';
 import {
   airlineLabel,
   airportCode,
@@ -33,8 +34,16 @@ const TIME_ROWS: {
   },
 ];
 
-function TimeCell({ utc, zone }: { utc: string | null; zone: string | null }) {
-  const t = formatLocalTime(utc, zone);
+function TimeCell({
+  utc,
+  zone,
+  timeFormat,
+}: {
+  utc: string | null;
+  zone: string | null;
+  timeFormat: TimeFormat;
+}) {
+  const t = formatLocalTime(utc, zone, timeFormat);
   if (!t) return <span className="muted">—</span>;
   return (
     <span title={utc ?? undefined}>
@@ -65,6 +74,8 @@ export function FlightDetailView({
   onDelete: () => void;
   deleting: boolean;
 }) {
+  const { distanceUnit, timeFormat } = useDisplayPrefs();
+  const otherUnit = distanceUnit === 'mi' ? 'km' : 'mi';
   const arrival = flight.divertedTo ?? flight.destination;
   const zoneFor = (side: 'dep' | 'arr', actual: boolean) =>
     side === 'dep' ? flight.origin.timezone : (actual ? arrival : flight.destination).timezone;
@@ -110,7 +121,7 @@ export function FlightDetailView({
         />
         <Field
           label="Distance"
-          value={`${formatDistance(flight.distanceMiles)} · ${formatDistance(flight.distanceMiles, 'km')}`}
+          value={`${formatDistance(flight.distanceMiles, distanceUnit)} · ${formatDistance(flight.distanceMiles, otherUnit)}`}
         />
         <Field label="Air time" value={formatMinutes(flight.airTimeMinutes)} />
         <Field label="Time between gates" value={formatMinutes(flight.gateTimeMinutes)} />
@@ -140,10 +151,18 @@ export function FlightDetailView({
                   </span>
                 </th>
                 <td className="py-2 pr-2">
-                  <TimeCell utc={flight[r.scheduled]} zone={zoneFor(r.side, false)} />
+                  <TimeCell
+                    utc={flight[r.scheduled]}
+                    zone={zoneFor(r.side, false)}
+                    timeFormat={timeFormat}
+                  />
                 </td>
                 <td className="py-2">
-                  <TimeCell utc={flight[r.actual]} zone={zoneFor(r.side, true)} />
+                  <TimeCell
+                    utc={flight[r.actual]}
+                    zone={zoneFor(r.side, true)}
+                    timeFormat={timeFormat}
+                  />
                 </td>
               </tr>
             ))}

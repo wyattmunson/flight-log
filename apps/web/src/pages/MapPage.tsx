@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useConfig, useMapData, useRouteFlights } from '../api/hooks';
+import { useConfig, useDisplayPrefs, useMapData, useRouteFlights } from '../api/hooks';
 import { FilterBar } from '../components/FilterBar';
 import { FlightMap } from '../components/FlightMap';
 import { ErrorState, Spinner } from '../components/States';
@@ -11,6 +11,7 @@ const isWide = () =>
   typeof window === 'undefined' || window.matchMedia?.('(min-width: 640px)').matches !== false;
 
 export function MapPage() {
+  const { distanceUnit } = useDisplayPrefs();
   const config = useConfig();
   const { filters, active } = useFilters();
   const mapData = useMapData(filters);
@@ -142,7 +143,7 @@ export function MapPage() {
                 <>
                   <p className="px-1 pb-2 text-xs muted">
                     {route.count} flight{route.count === 1 ? '' : 's'} ·{' '}
-                    {formatDistance(route.distanceMiles)} each way
+                    {formatDistance(route.distanceMiles, distanceUnit)} each way
                   </p>
                   {routeFlights.isLoading && <Spinner />}
                   {routeFlights.isError && <ErrorState error={routeFlights.error} />}
@@ -179,7 +180,7 @@ export function MapPage() {
                           {code(r.airportA)} ↔ {code(r.airportB)}
                         </span>
                         <span className="text-xs muted">
-                          {r.count}× · {formatDistance(r.distanceMiles)}
+                          {r.count}× · {formatDistance(r.distanceMiles, distanceUnit)}
                         </span>
                       </button>
                     </li>

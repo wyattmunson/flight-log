@@ -306,3 +306,25 @@ export interface SessionInfo {
   /** True for the session making this request. */
   current: boolean;
 }
+
+/** `GET/PATCH /api/auth/preferences`. Display settings only; stored values (miles, UTC) never change. */
+export interface Preferences {
+  distanceUnit: 'mi' | 'km';
+  timeFormat: '12h' | '24h';
+  homeAirportId: number | null;
+  /** The home airport resolved for display; null when none is set. */
+  homeAirport: AirportSummary | null;
+}
+
+/** `DELETE /api/flights?confirm=…`: what was removed for the current user. */
+export interface DeleteAllFlightsResult {
+  deleted: number;
+  deletedImportBatches: number;
+}
+
+/** `GET /api/flights/export?format=json`: detail-level, so it includes PNR and seat. */
+export interface FlightsExport {
+  exportedAt: string;
+  count: number;
+  flights: FlightDetail[];
+}

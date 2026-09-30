@@ -8,6 +8,7 @@ erDiagram
   users ||--o{ flights : owns
   users ||--o{ import_batches : owns
   users ||--o{ sessions : "logs in with"
+  airports |o--o{ users : "home airport (nullable)"
   import_batches |o--o{ flights : "created (nullable)"
   airports ||--o{ flights : "origin"
   airports ||--o{ flights : "destination"
@@ -21,6 +22,9 @@ erDiagram
     text email UK "nullable"
     text display_name
     text password_hash "nullable, scrypt$N$r$p$salt$hash"
+    text distance_unit "mi | km, default mi (CHECK)"
+    text time_format "12h | 24h, default 12h (CHECK)"
+    int home_airport_id FK "nullable, ON DELETE SET NULL"
     timestamptz created_at
   }
   sessions {
@@ -164,6 +168,14 @@ on, the user of the session cookie (401 otherwise).
   (`deleteSessionForUser`, `listSessionsForUser`), so someone else's session id is just "not found".
 - Changing `users.email` (`PUT /api/auth/email`) relies on the `UNIQUE(email)` constraint: a violation
   becomes the 409, which avoids a check-then-write race. The address is never logged or echoed.
+
+- `users.distance_unit`, `time_format` and `home_airport_id` are display preferences. They are explicit
+  columns rather than JSON because the airport needs a real foreign key and the two enums are enforced
+  by CHECK constraints (hand-written in the `add_user_preferences` migration; Prisma cannot model
+  them, and `migrate dev` leaves them alone). They never affect stored or derived values: flights stay
+  in miles and UTC.
+- Deleting all of a user's flights (`DELETE /api/flights`) also removes their `import_batches`; the
+  `users` row, sessions and preferences stay.
 
 Reference tables (`airports`, `airlines`, `aircraft_types`, `aircraft_families`, `flight_lookup_cache`) are global.
 

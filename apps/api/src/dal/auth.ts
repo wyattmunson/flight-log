@@ -1,4 +1,6 @@
+import type { AirportSummary, Preferences } from '@flight-log/shared';
 import { prisma } from '../db';
+import { toAirportSummary } from './mappers';
 
 /** Users and sessions. Not user-*owned* data like flights, so lookups here are by id/email/token. */
 
@@ -83,3 +85,36 @@ export const listSessionsForUser = (userId: string, now: Date): Promise<SessionL
 /** Deletes one session if it belongs to `userId`; "not yours" is indistinguishable from "not there". */
 export const deleteSessionForUser = async (userId: string, id: string): Promise<boolean> =>
   (await prisma.session.deleteMany({ where: { id, userId } })).count > 0;
+
+const preferencesSelect = {
+  distanceUnit: true,
+  timeFormat: true,
+  homeAirportId: true,
+  homeAirport: true,
+} as const;
+
+const toPreferences = (u: {
+  distanceUnit: string;
+  timeFormat: string;
+  homeAirportId: number | null;
+  homeAirport: Parameters<typeof toAirportSummary>[0] | null;
+}): Preferences => ({
+  distanceUnit: u.distanceUnit === 'km' ? 'km' : 'mi',
+  timeFormat: u.timeFormat === '24h' ? '24h' : '12h',
+  homeAirportId: u.homeAirportId,
+  homeAirport: u.homeAirport ? toAirportSummary(u.homeAirport) : (null as AirportSummary | null),
+});
+
+export async function getPreferences(userId: string): Promise<Preferences | null> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: preferencesSelect });
+  return user ? toPreferences(user) : null;
+}
+
+export async function updatePreferences(
+  userId: string,
+  data: { distanceUnit?: string; timeFormat?: string; homeAirportId?: number | null },
+): Promise<Preferences> {
+  return toPreferences(
+    await prisma.user.update({ where: { id: userId }, data, select: preferencesSelect }),
+  );
+}

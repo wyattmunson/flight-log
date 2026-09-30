@@ -168,6 +168,41 @@ export type ChangeEmailInput = z.infer<typeof ChangeEmailInputSchema>;
 
 export const SessionIdParamSchema = z.object({ id: z.string().uuid() });
 
+export const DistanceUnitSchema = z.enum(['mi', 'km']);
+export const TimeFormatSchema = z.enum(['12h', '24h']);
+
+/** `PATCH /api/auth/preferences`. Every field is optional but at least one must be present. */
+export const UpdatePreferencesInputSchema = z
+  .object({
+    distanceUnit: DistanceUnitSchema.optional(),
+    timeFormat: TimeFormatSchema.optional(),
+    homeAirportId: z.number().int().positive().nullable().optional(),
+  })
+  .strict()
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: 'Provide at least one preference',
+  });
+export type UpdatePreferencesInput = z.infer<typeof UpdatePreferencesInputSchema>;
+
+export const PREFERENCE_DEFAULTS = {
+  distanceUnit: 'mi',
+  timeFormat: '12h',
+  homeAirportId: null,
+} as const;
+
+/** `GET /api/flights/export?format=csv|json` (csv when omitted). */
+export const ExportQuerySchema = z.object({ format: z.enum(['csv', 'json']).default('csv') });
+
+/** `DELETE /api/flights` only proceeds with `?confirm=` set to exactly this. */
+export const DELETE_ALL_FLIGHTS_CONFIRM = 'delete-all-flights';
+export const DeleteAllFlightsQuerySchema = z.object({
+  confirm: z.literal(DELETE_ALL_FLIGHTS_CONFIRM, {
+    errorMap: () => ({
+      message: `Set confirm=${DELETE_ALL_FLIGHTS_CONFIRM} to delete every flight`,
+    }),
+  }),
+});
+
 export const DISPLAY_NAME_MAX_LENGTH = 80;
 
 /** `PATCH /api/auth/me`. Only the name is editable; email and password have their own paths. */

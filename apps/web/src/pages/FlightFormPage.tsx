@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   FLIGHT_TIME_FIELDS,
@@ -18,6 +18,7 @@ import {
   useAirlineSearch,
   useAirportSearch,
   useConfig,
+  useDisplayPrefs,
   useFlight,
   useLookup,
   useSaveFlight,
@@ -173,6 +174,15 @@ export function FlightFormPage() {
   useEffect(() => {
     if (existing.data) setState(fromFlight(existing.data));
   }, [existing.data]);
+
+  // A new flight starts at the home airport (once: clearing it afterwards must stick).
+  const { homeAirport } = useDisplayPrefs();
+  const homeApplied = useRef(false);
+  useEffect(() => {
+    if (editing || homeApplied.current || !homeAirport) return;
+    homeApplied.current = true;
+    setState((s) => (s.origin ? s : { ...s, origin: homeAirport }));
+  }, [editing, homeAirport]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setState((s) => ({ ...s, [key]: value }));

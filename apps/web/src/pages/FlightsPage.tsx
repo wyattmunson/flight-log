@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { FlightListItem } from '@flight-log/shared';
-import { useDeleteFlight, useFlight, useFlights } from '../api/hooks';
+import { useDeleteFlight, useDisplayPrefs, useFlight, useFlights } from '../api/hooks';
 import { Drawer } from '../components/Drawer';
 import { FilterBar } from '../components/FilterBar';
 import { FlightDetailView } from '../components/FlightDetail';
@@ -199,6 +199,7 @@ export function FlightsPage() {
 }
 
 function FlightRow({ flight: f, onOpen }: { flight: FlightListItem; onOpen: () => void }) {
+  const { distanceUnit } = useDisplayPrefs();
   return (
     <tr
       className={`cursor-pointer border-t border-stone-100 hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-800/50 ${f.canceled ? 'text-stone-400 line-through decoration-stone-400/60' : ''}`}
@@ -230,7 +231,7 @@ function FlightRow({ flight: f, onOpen }: { flight: FlightListItem; onOpen: () =
       </td>
       <td className="whitespace-nowrap px-3 py-2">{flightDesignator(f.airline, f.flightNumber)}</td>
       <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
-        {formatDistance(f.distanceMiles)}
+        {formatDistance(f.distanceMiles, distanceUnit)}
       </td>
       <td className="hidden px-3 py-2 lg:table-cell">{f.aircraftType ?? '—'}</td>
       <td className="hidden whitespace-nowrap px-3 py-2 text-right tabular-nums sm:table-cell">

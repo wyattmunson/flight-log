@@ -1,10 +1,14 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { DELETE_ALL_FLIGHTS_CONFIRM, PREFERENCE_DEFAULTS } from '@flight-log/shared';
 import type {
   AirlineSummary,
   AirportSummary,
   AppConfig,
   AuthMe,
   ChangeEmailInput,
+  DeleteAllFlightsResult,
+  Preferences,
+  UpdatePreferencesInput,
   ChangePasswordInput,
   SessionInfo,
   UpdateProfileInput,
@@ -67,6 +71,35 @@ export function useUpdateProfile() {
       queryClient.setQueryData(ME_KEY, me);
       return queryClient.invalidateQueries({ queryKey: ME_KEY });
     },
+  });
+}
+
+export const PREFERENCES_KEY = ['preferences'] as const;
+
+/** Display preferences (also for the default user when auth is off). */
+export const usePreferences = () =>
+  useQuery({
+    queryKey: PREFERENCES_KEY,
+    queryFn: () => apiFetch<Preferences>('/auth/preferences'),
+    staleTime: 5 * 60_000,
+  });
+
+/** Unit and clock to display with. Falls back to the defaults while loading or if the request fails. */
+export function useDisplayPrefs() {
+  const prefs = usePreferences().data;
+  return {
+    distanceUnit: prefs?.distanceUnit ?? PREFERENCE_DEFAULTS.distanceUnit,
+    timeFormat: prefs?.timeFormat ?? PREFERENCE_DEFAULTS.timeFormat,
+    homeAirport: prefs?.homeAirport ?? null,
+  };
+}
+
+export function useUpdatePreferences() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdatePreferencesInput) =>
+      apiFetch<Preferences>('/auth/preferences', { method: 'PATCH', json: input }),
+    onSuccess: (prefs) => queryClient.setQueryData(PREFERENCES_KEY, prefs),
   });
 }
 
@@ -217,6 +250,19 @@ export function useSaveFlight() {
       id
         ? apiFetch<FlightDetail>(`/flights/${id}`, { method: 'PATCH', json: input })
         : apiFetch<FlightDetail>('/flights', { method: 'POST', json: input }),
+    onSuccess: invalidate,
+  });
+}
+
+/** Empties the user's log. The API insists on the confirmation token; the UI adds a typed phrase. */
+export function useDeleteAllFlights() {
+  const invalidate = useInvalidateFlightData();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<DeleteAllFlightsResult>('/flights', {
+        method: 'DELETE',
+        query: { confirm: DELETE_ALL_FLIGHTS_CONFIRM },
+      }),
     onSuccess: invalidate,
   });
 }

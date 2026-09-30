@@ -29,6 +29,12 @@ model User {
   /// "scrypt$N$r$p$saltB64$hashB64" (see src/auth/password.ts). Null = cannot log in.
   passwordHash  String?       @map("password_hash")
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Display preferences. Explicit columns rather than JSON so home_airport_id can be a real FK and
+  /// the values are constrained by the database. CHECK constraints are hand-written in the migration.
+  distanceUnit  String        @default("mi") @map("distance_unit")
+  timeFormat    String        @default("12h") @map("time_format")
+  homeAirportId Int?          @map("home_airport_id")
+  homeAirport   Airport?      @relation("homeAirport", fields: [homeAirportId], references: [id], onDelete: SetNull)
   flights       Flight[]
   importBatches ImportBatch[]
   sessions      Session[]
@@ -75,6 +81,7 @@ model Airport {
   departures Flight[] @relation("origin")
   arrivals   Flight[] @relation("destination")
   diversions Flight[] @relation("diverted")
+  homeOf     User[]   @relation("homeAirport")
 
   @@index([iataCode])
   @@index([icaoCode])

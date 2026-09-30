@@ -15,6 +15,7 @@ src/http/             errors.ts (AppError, errorHandler), route.ts (async wrappe
 src/auth/             password.ts (scrypt), sessions.ts (DB sessions, list/revoke, cookie helpers), cookies.ts, throttle.ts,
                       users.ts (create/adopt/set-password), cli.ts (npm run user:create / user:set-password)
 src/routes/           thin: Zod-parse input → call service/DAL → res.json. No Prisma here.
+src/export/           flightsCsv.ts (flights → Flighty-layout CSV, pure; round-trips through the importer)
 src/services/         derive.ts (UTC conversion, distance, air time), flights.ts (manual create/PATCH)
 src/import/           columns.ts (header map) → parseRow.ts (pure) → service.ts (preview/commit) + previewStore.ts
 src/dal/              ALL database access. User-owned: flights.ts, imports.ts, stats.ts, map.ts.
@@ -77,6 +78,11 @@ convert with `Number()`(see the`num()` helpers).
   `PUT /email` answer 400 `auth_disabled` when `AUTH_REQUIRED` is off, since there is no session then.
   They only touch sessions through `auth/sessions.ts`, always with `req.userId`. Never select or return
   `tokenHash`. `createSession(userId, userAgent?)` stores the UA truncated; never store IPs.
+- Export (`GET /api/flights/export`) and delete-all (`DELETE /api/flights?confirm=delete-all-flights`)
+  are in `routes/flights.ts` and go through `dal/flights.ts` (`listAllFlights`, `deleteAllFlights`),
+  both scoped by `userId`. `/export` is registered before `/:id`. Export includes PNR/seat on purpose:
+  keep it `no-store`, attachment, unlogged. Delete-all also deletes import batches and must never
+  touch reference data. Preferences (`/api/auth/preferences`) work with auth off and only change display.
 - Wrong _current_ password on `/api/auth/password` is a 400 on purpose: the web app treats every 401 as
   "session lost".
 
