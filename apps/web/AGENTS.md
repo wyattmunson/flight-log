@@ -6,11 +6,12 @@ Recharts 2 + maplibre-gl 6. Root rules in [`/AGENTS.md`](../../AGENTS.md) apply.
 ## Layout
 
 ```
-src/main.tsx           QueryClient (no retry on 4xx), BrowserRouter
-src/App.tsx            routes; MapPage and StatsPage are React.lazy (MapLibre/Recharts are heavy)
+src/main.tsx           QueryClient (no retry on 4xx; global 401 handler), BrowserRouter
+src/App.tsx            routes; /login is public, everything else sits under <RequireAuth>;
+                       MapPage and StatsPage are React.lazy (MapLibre/Recharts are heavy)
 src/api/client.ts      apiFetch() + ApiError (fieldErrors from validation details)
 src/api/hooks.ts       every query/mutation hook; mutations invalidate all flight-derived keys
-src/lib/               format.ts (display helpers), useFilters.ts (URL-backed filters),
+src/lib/               auth.ts (safeNextPath, loginPath, handleUnauthorized), format.ts (display helpers), useFilters.ts (URL-backed filters),
                        useChartTheme.ts (resolved CSS color tokens), useDebounced.ts
 src/components/        Layout (nav + attribution footer), FilterBar, Combobox (ARIA typeahead),
                        Drawer (dialog), States (Spinner/ErrorState/EmptyState/NoFlightsYet),
@@ -37,6 +38,16 @@ test/                  Vitest + React Testing Library (jsdom)
 - **Time display:** use `formatLocalTime(utc, airport.timezone)` / `toLocalParts` (shared). The zone
   rule for arrival _actuals_ (diversion airport) must match the API. See `zoneFor` in
   `FlightFormPage.tsx` and in `FlightDetail.tsx`.
+
+## Auth
+
+- `useMe` / `useLogin` / `useLogout` / `useChangePassword` are in `hooks.ts`. Login and logout clear the whole
+  query cache. `RequireAuth` shows the Spinner while `/auth/me` loads, sends a 401 to `/login?next=…`, and
+  renders the app with no login UI when `authRequired` is false.
+- Decide "signed in" from `me.status === 'success'`, never `me.data`: after a failed re-check TanStack Query
+  keeps the old `data` beside the error, which caused a login <-> guard redirect loop.
+- Any `next` target must go through `safeNextPath()` (single leading `/`, no `//`, no backslash).
+- The dev proxy keeps `changeOrigin: false`, so the API's CSRF check sees the browser's `Host`.
 
 ## Charts (dataviz conventions)
 

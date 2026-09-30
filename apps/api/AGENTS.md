@@ -10,12 +10,15 @@ src/index.ts          listen + graceful shutdown (imports ./env first: loads the
 src/app.ts            createApp({ lookupProvider? }): middleware + router mounts. Tests call this.
 src/env.ts            typed getters over process.env (read lazily, so tests can override)
 src/db.ts             Prisma singleton
-src/http/             errors.ts (AppError, errorHandler), route.ts (async wrapper), resolveUser.ts, requestLog.ts
+src/http/             errors.ts (AppError, errorHandler), route.ts (async wrapper), resolveUser.ts (sets req.userId),
+                      csrf.ts (Origin / Sec-Fetch-Site guard, only when AUTH_REQUIRED), requestLog.ts
+src/auth/             password.ts (scrypt), sessions.ts (DB sessions + cookie helpers), cookies.ts, throttle.ts,
+                      users.ts (create/adopt/set-password), cli.ts (npm run user:create / user:set-password)
 src/routes/           thin: Zod-parse input → call service/DAL → res.json. No Prisma here.
 src/services/         derive.ts (UTC conversion, distance, air time), flights.ts (manual create/PATCH)
 src/import/           columns.ts (header map) → parseRow.ts (pure) → service.ts (preview/commit) + previewStore.ts
 src/dal/              ALL database access. User-owned: flights.ts, imports.ts, stats.ts, map.ts.
-                      Global: reference.ts. Shared: filters.ts, mappers.ts
+                      Global: reference.ts. Users/sessions: auth.ts. Shared: filters.ts, mappers.ts
 src/lookup/           types.ts (FlightLookupProvider), providers/{nullProvider,stubProvider}.ts, registry.ts, service.ts (cache)
 src/seed/             reference.ts (OurAirports/OpenFlights parse + insert), cli.ts
 prisma/               schema.prisma + migrations (init migration has hand-written SQL at the end)
@@ -25,7 +28,8 @@ test/integration/     supertest against createApp(); real Postgres (flightlog_te
 test/fixtures/        flighty-sample.csv (synthetic, 17 rows), reference.ts (test airports/airlines)
 ```
 
-Request path: `requestLog → express.json → resolveUser (/api/*) → router → errorHandler`.
+Request path: `requestLog → csrfGuard (/api) → express.json → resolveUser (/api/*) → router → errorHandler`.
+`/api/health` is mounted before `resolveUser`; `POST /api/auth/login` and `/logout` are let through inside it.
 
 ## Rules
 
@@ -54,6 +58,17 @@ convert with `Number()`(see the`num()` helpers).
    `new | duplicate | invalid`.
 5. Commit (one transaction): batch row, aircraft-type upserts, `createMany({ skipDuplicates })`
    (ON CONFLICT DO NOTHING), counts. Then remember Flighty IDs on reference rows.
+
+## Auth
+
+- `AUTH_REQUIRED`, `COOKIE_SECURE`, `TRUST_PROXY_HOPS`, `SESSION_TTL_DAYS` are lazy `env` getters; tests set
+  `process.env.AUTH_REQUIRED` and must restore it. With it off everything acts as the default user.
+- Only `resolveUser` sets `req.userId` (and `req.sessionId`). Never log or return passwords, hashes,
+  tokens or cookies, and don't put the submitted email in an error. Session/user DB access is `dal/auth.ts`.
+- Cookie-authenticated tests send `Sec-Fetch-Site: same-origin` (or a matching `Origin`), or the CSRF
+  guard answers 403. The login throttle lives in `authRouter()`, so each `createApp()` starts fresh.
+- Wrong _current_ password on `/api/auth/password` is a 400 on purpose: the web app treats every 401 as
+  "session lost".
 
 ## Tests
 

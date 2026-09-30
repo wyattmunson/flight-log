@@ -16,6 +16,7 @@ Licensed for **noncommercial use only**. See [License](#license).
 | [`docs/data-model.md`](docs/data-model.md)                             | Both          | ERD, dedupe rules, derived values, normalization                                                       |
 | [`docs/flight-data-api-analysis.md`](docs/flight-data-api-analysis.md) | Both          | Phase 2 provider research and recommendation                                                           |
 | [`docs/release-notes/`](docs/release-notes/)                           | Both          | Dated notes: what shipped, setup commands, pitfalls and workarounds                                    |
+| [`docs/todo/`](docs/todo/)                                             | Both          | Open follow-ups and loose ends, by date                                                                |
 | [`AGENTS.md`](AGENTS.md) (+ one per workspace)                         | Coding agents | Terse rules, invariants, gotchas and change checklists. `CLAUDE.md` files import them for Claude Code. |
 
 The rationale lives here. The agent files state the resulting rules and link back, so update both
@@ -59,14 +60,15 @@ npm run dev                      # api on :3001, web on :5173
 
 ### Scripts
 
-| Command                                    | What it does                                                                              |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `npm test`                                 | All tests: shared unit, API unit + integration (needs the `db` container), web components |
-| `npm run lint` / `npm run typecheck`       | ESLint (flat config) / `tsc --noEmit` in every workspace                                  |
-| `npm run format` / `format:check`          | Prettier                                                                                  |
-| `npm run seed:reference`                   | Download (or read from `data/`) and insert reference data                                 |
-| `npm run seed:aircraft-families`           | Create aircraft family rows and assign a family to each aircraft type that has none       |
-| `docker compose exec -w /app api npm test` | Run the suite inside Docker                                                               |
+| Command                                       | What it does                                                                              |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `npm test`                                    | All tests: shared unit, API unit + integration (needs the `db` container), web components |
+| `npm run lint` / `npm run typecheck`          | ESLint (flat config) / `tsc --noEmit` in every workspace                                  |
+| `npm run format` / `format:check`             | Prettier                                                                                  |
+| `npm run seed:reference`                      | Download (or read from `data/`) and insert reference data                                 |
+| `npm run seed:aircraft-families`              | Create aircraft family rows and assign a family to each aircraft type that has none       |
+| `npm run user:create -w @flight-log/api -- …` | Create a login, or `--adopt-default` (see [Authentication](#authentication))              |
+| `docker compose exec -w /app api npm test`    | Run the suite inside Docker                                                               |
 
 Set `FLIGHT_API_PROVIDER=stub` in `.env` to enable the demo **Look up flight** button (try `UA837` or `BA117`).
 
@@ -75,7 +77,8 @@ Set `FLIGHT_API_PROVIDER=stub` in `.env` to enable the demo **Look up flight** b
 ```
 apps/api          Express + Prisma (run with tsx)
   prisma/         schema + migrations (the init migration adds a raw-SQL partial dedupe index)
-  src/http/       error shape, async wrapper, resolveUser, access log
+  src/http/       error shape, async wrapper, resolveUser, CSRF guard, access log
+  src/auth/       scrypt passwords, sessions, cookies, login throttle, user CLI
   src/dal/        user-scoped data access: flights, imports, stats, map; global reference data
   src/import/     CSV header mapping, pure row parser, preview store, preview/commit service
   src/services/   derived values (UTC conversion, distance, air time), manual create/update
@@ -84,12 +87,12 @@ apps/api          Express + Prisma (run with tsx)
   test/           unit + supertest integration tests, synthetic Flighty fixture
 apps/web          Vite + React 18 + React Router + TanStack Query + Tailwind + Recharts + MapLibre
 packages/shared   Zod schemas, API types, haversine, great-circle points, normalization, Luxon time helpers
-docs/             data-model.md (ERD), flight-data-api-analysis.md, release-notes/
+docs/             data-model.md (ERD), flight-data-api-analysis.md, release-notes/, todo/
 docker/           dev image, api entrypoint (migrate → seed-if-empty → dev), test-DB init
 deploy/           production deploy (Lightsail + k3s + CloudNativePG): Dockerfiles, k8s manifests, scripts
 ```
 
-API request path: `requestLog → express.json → resolveUser → router (Zod-validated) → service / import →
+API request path: `requestLog → csrfGuard → express.json → resolveUser → router (Zod-validated) → service / import →
 dal → Prisma`, with `errorHandler` turning every failure into `{ "error": { "code", "message", "details?" } }`.
 Why it's shaped this way is in [Design decisions](#design-decisions).
 
@@ -100,8 +103,9 @@ Why it's shaped this way is in [Design decisions](#design-decisions).
 | Module                         | Responsibility                                                                                                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `app.ts`, `index.ts`, `env.ts` | App factory (tests call `createApp()`), server start, typed env with root `.env` loading                                                                            |
-| `http/`                        | `AppError` + error handler, `route()` async wrapper, `resolveUser`, access log (no bodies)                                                                          |
-| `routes/`                      | Thin routers: `flights`, `import`, `insights` (map, stats, filter options), `reference` (search), `lookup`                                                          |
+| `http/`                        | `AppError` + error handler, `route()` async wrapper, `resolveUser` (the only place `req.userId` is set), `csrfGuard`, access log (no bodies)                        |
+| `auth/`                        | `password` (scrypt), `sessions` (create / lookup-and-refresh / delete), `cookies`, `throttle`, `users` (create, adopt, set password), `cli`                         |
+| `routes/`                      | Thin routers: `auth`, `flights`, `import`, `insights` (map, stats, filter options), `reference` (search), `lookup`                                                  |
 | `services/derive.ts`           | Local time → UTC by airport zone, great-circle distance, air time. Shared by import and the form.                                                                   |
 | `services/flights.ts`          | Manual create and PATCH (merge, then recompute every derived value)                                                                                                 |
 | `import/`                      | `columns.ts` header mapping → `parseRow.ts` pure row parser + `naturalKey` → `service.ts` preview/commit → `previewStore.ts`                                        |
@@ -111,17 +115,18 @@ Why it's shaped this way is in [Design decisions](#design-decisions).
 
 **Web (`apps/web/src`)**
 
-| Piece                                                     | Responsibility                                                                                           |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `pages/MapPage` + `components/FlightMap`                  | MapLibre map: frequency-weighted arcs, sized airport markers, popups, route list and route flights panel |
-| `pages/FlightsPage` + `components/FlightDetail`, `Drawer` | Sortable, filterable, paginated table; detail drawer (`?flight=<id>`) with local times; delete           |
-| `pages/FlightFormPage` + `components/Combobox`            | Add/edit form with airport/airline typeahead, live distance, local-time inputs, **Look up flight**       |
-| `pages/ImportPage`                                        | Drag-and-drop upload, preview (counts, sample, errors), commit summary, import history + undo            |
-| `pages/StatsPage` + `components/charts`, `SortableTable`  | Headline cards, records, punctuality, Recharts charts with table views, mi/km toggle                     |
-| `components/FilterBar`, `lib/useFilters`                  | Year range, airline and cabin filters stored in the URL, shared by map, list and stats                   |
-| `components/Layout`, `States`                             | Nav, attribution footer; spinner, error (with retry) and empty states                                    |
-| `api/client`, `api/hooks`                                 | `fetch` wrapper with typed errors; every TanStack Query hook plus cache invalidation                     |
-| `lib/format`, `lib/useChartTheme`                         | Display formatting (dates, distances, local times, country names); chart colors from CSS tokens          |
+| Piece                                                                         | Responsibility                                                                                                    |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `pages/MapPage` + `components/FlightMap`                                      | MapLibre map: frequency-weighted arcs, sized airport markers, popups, route list and route flights panel          |
+| `pages/FlightsPage` + `components/FlightDetail`, `Drawer`                     | Sortable, filterable, paginated table; detail drawer (`?flight=<id>`) with local times; delete                    |
+| `pages/FlightFormPage` + `components/Combobox`                                | Add/edit form with airport/airline typeahead, live distance, local-time inputs, **Look up flight**                |
+| `pages/ImportPage`                                                            | Drag-and-drop upload, preview (counts, sample, errors), commit summary, import history + undo                     |
+| `pages/StatsPage` + `components/charts`, `SortableTable`                      | Headline cards, records, punctuality, Recharts charts with table views, mi/km toggle                              |
+| `components/FilterBar`, `lib/useFilters`                                      | Year range, airline and cabin filters stored in the URL, shared by map, list and stats                            |
+| `components/Layout`, `States`                                                 | Nav, attribution footer; spinner, error (with retry) and empty states                                             |
+| `pages/LoginPage`, `ChangePasswordPage`, `components/RequireAuth`, `UserMenu` | Sign in (returns to the page you asked for), route guard, user menu, change password (all inert when auth is off) |
+| `api/client`, `api/hooks`                                                     | `fetch` wrapper with typed errors; every TanStack Query hook plus cache invalidation                              |
+| `lib/format`, `lib/useChartTheme`                                             | Display formatting (dates, distances, local times, country names); chart colors from CSS tokens                   |
 
 **Shared (`packages/shared/src`)**: `schemas.ts` (Zod inputs), `types.ts` (API responses), `distance.ts`,
 `geo.ts` (great circle with unwrapped longitudes), `normalize.ts`, `time.ts` (Luxon parsing/formatting), `constants.ts`.
@@ -158,6 +163,8 @@ sequenceDiagram
 | Method           | Path                                                 |                                                                                                                                             |
 | ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET              | `/api/health`                                        | DB ping                                                                                                                                     |
+| POST             | `/api/auth/login`, `/logout`                         | `{ email, password }` sets the session cookie; logout clears it (204, works without a session)                                              |
+| GET / POST       | `/api/auth/me`, `/api/auth/password`                 | current user + `authRequired`; `{ currentPassword, newPassword }` signs out your other sessions                                             |
 | GET              | `/api/config`                                        | Map style URL, lookup status, API docs URL                                                                                                  |
 | GET              | `/api/docs`, `/api/openapi.json`                     | Swagger UI and the raw OpenAPI spec (`ENABLE_API_DOCS`, on by default)                                                                      |
 | GET              | `/api/flights`                                       | `page, pageSize, sort (date, -date, distance, route, airline, flightNumber, aircraft, duration), year, yearFrom, yearTo, airline, cabin, q` |
@@ -172,6 +179,8 @@ sequenceDiagram
 | GET              | `/api/filter-options`                                | years, airlines, cabins present in your data                                                                                                |
 | GET              | `/api/airports/search?q=`, `/api/airlines/search?q=` | typeahead                                                                                                                                   |
 | POST             | `/api/lookup`                                        | `{ flightNumber, date }`. Returns 501 `{ configured: false }` unless a provider is set                                                      |
+
+With `AUTH_REQUIRED=true` every route except `GET /api/health` and `POST /api/auth/login` (and logout) needs the session cookie (401 `unauthenticated`); see [Authentication](#authentication).
 
 `airline` filter values are an airline id, or `raw:<name>` for airlines not found in the reference data.
 
@@ -194,8 +203,57 @@ sequenceDiagram
 | **Map style URL served by `/api/config`**                                                        | One env var (`MAP_STYLE_URL`) for all environments, and no Vite rebuild to change it                                                        | One extra request at startup                                              |
 | **Filters in the URL**                                                                           | Shareable, reload-safe views. Map, list and stats read the same parameters through `useFilters`                                             | Filters don't carry over when you switch pages from the nav (Roadmap)     |
 | **Single-hue charts, horizontal bars, no pies, table views, separate light/dark tokens**         | Color-blind safe and readable on mobile, with an accessible fallback for every chart                                                        | Less decorative                                                           |
-| **`resolveUser` middleware + user-scoped DAL**                                                   | Adding real auth later is a one-file change                                                                                                 | Every DAL function carries a `userId` parameter                           |
+| **`resolveUser` middleware + user-scoped DAL**                                                   | Auth only decides who `req.userId` is: the default user, or the user of a valid session cookie. No query changed when login was added       | Every DAL function carries a `userId` parameter                           |
+| **Opt-in, in-app auth: scrypt + DB sessions, no libraries**                                      | Node's built-in `crypto.scrypt` needs no dependency (license rule), and sessions in Postgres can be revoked (logout, password change)       | One lookup per request; login throttle is per process, not shared         |
 | **Pinned, proven major versions**                                                                | Predictable builds while the feature set settles                                                                                            | Upgrades are planned work (Roadmap)                                       |
+
+## Authentication
+
+Off by default so local development stays login-free. Set `AUTH_REQUIRED=true` (API env; passed
+through by `docker-compose.yml`) to require a login. Production sets it in the API ConfigMap, and the
+Traefik basic auth that used to guard the site is gone.
+
+- **Login.** `POST /api/auth/login` with an email and password (the email is lower-cased and trimmed).
+  On success the API creates a row in `sessions` and sets the `flightlog_session` cookie: a random
+  32-byte token, HttpOnly, SameSite=Lax, `Secure` in production. Only the token's SHA-256 is stored.
+  Unknown email, wrong password and an account without a password all return the same 401, and each
+  runs a full scrypt check so response time does not reveal which accounts exist.
+- **Passwords.** `crypto.scrypt` (N=2^15, r=8, p=1, 16-byte salt, 64-byte key) stored as
+  `scrypt$N$r$p$salt$hash`, so the cost can be raised later. 12 to 128 characters, no composition
+  rules, must not equal the email.
+- **Sessions.** 30-day sliding expiry (`SESSION_TTL_DAYS`), extended at most once an hour while you use
+  the app. Logout deletes the session. Changing your password signs out your other sessions.
+- **Abuse limits.** Failed-login throttling per IP and per email (in memory, per API process; 429 with
+  `Retry-After`). With auth on, non-GET requests must be same-origin (`Origin`, else `Sec-Fetch-Site`),
+  otherwise 403 `csrf_rejected`. Behind Traefik the API trusts one proxy hop (`TRUST_PROXY_HOPS`).
+- **`resolveUser`** stays the only place `req.userId` is set. With auth on it never falls back to the
+  default user.
+- **Web.** `/login` returns you to the page you asked for (only same-origin relative paths are honored).
+  Any 401 sends you back to `/login`. A user menu offers Change password and Sign out. With auth off the
+  API reports `authRequired: false` and none of this is shown.
+
+**Adding a user** (there is no signup page). From `apps/api`, against the database in `.env`:
+
+```bash
+npm run user:create -w @flight-log/api -- --email you@example.com --name "Your Name"
+```
+
+Give the seeded default user (which already owns your imported flights) a login instead of creating a
+new row. It fails if that user already has a password, unless you pass `--force`:
+
+```bash
+npm run user:create -w @flight-log/api -- --adopt-default --email you@example.com --name "Your Name"
+```
+
+Reset a password (also signs that user out everywhere):
+
+```bash
+npm run user:set-password -w @flight-log/api -- --email you@example.com
+```
+
+The password is prompted for twice without echo on a terminal; otherwise one line is read from stdin
+(`printf '%s\n' "$PW" | npm run user:create …`). It is never printed. In production see
+[`deploy/README.md`](deploy/README.md#enabling-login-on-an-existing-deployment-replaces-basic-auth).
 
 ## Extending the app
 
@@ -259,7 +317,7 @@ The analysis recommends **AeroDataBox** (free RapidAPI tier) as primary and **Fl
 
 **Flighty CSV**
 
-- **Times without an offset** are wall-clock times at the relevant airport. Gate departure and
+- **Times without an offset** are wall-clock timefiorde relevant airport. Gate departure and
   takeoff use the origin. Landing and gate arrival use the destination, except that _actual_ arrival
   times of a diverted flight use the diversion airport. Values with `Z` or an offset are honored as-is.
 - **Dates** are tried as ISO first, then common variants. Ambiguous slash dates are read US-style
@@ -314,7 +372,7 @@ The analysis recommends **AeroDataBox** (free RapidAPI tier) as primary and **Fl
 
 **Platform**
 
-- Phase 1 has no auth. Every request acts as the seeded user `DEFAULT_USER_ID`.
+- Auth is opt-in. With `AUTH_REQUIRED` off (the default; local dev) every request acts as the seeded user `DEFAULT_USER_ID` and the web app shows no login UI. With it on, requests act as the user of the session cookie. There is no signup, email verification, password reset, MFA or roles; accounts are created with the CLI (see [Authentication](#authentication)).
 - The map style URL comes from `MAP_STYLE_URL` and reaches the browser via `/api/config`, so one env
   var configures it. The default is OpenFreeMap "liberty", which needs no key.
 - Default host ports are 5434 (db) and 3001 (api) so they don't collide with common local
@@ -358,7 +416,8 @@ row written differently) and 2 invalid (unknown airport `ZZX`, unparseable date)
 
 **Platform**
 
-- [ ] Authentication: replace `resolveUser` with session/JWT verification (the DAL is already scoped).
+- [x] Authentication: email + password with database sessions (done; see [Authentication](#authentication)).
+- [ ] Later auth options: OIDC (would add an `oidc_subject` column), password reset, MFA/passkeys.
 - [ ] Production build: compile the API (or bundle with esbuild), serve `apps/web/dist` statically,
       and add a production Dockerfile and compose profile.
 - [ ] Move import previews to a DB table (e.g. `import_previews` with `expires_at`) for multiple

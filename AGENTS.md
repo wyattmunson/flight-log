@@ -8,7 +8,8 @@ only points to. Workspace-specific rules live in `apps/api/AGENTS.md`, `apps/web
 ## What this is
 
 Personal flight log: import a Flighty CSV (preview → commit → undo) or add flights by hand, then view
-them on a MapLibre great-circle map and a stats dashboard. **Phase 1 is complete.** Phase 2 (live
+them on a MapLibre great-circle map and a stats dashboard. Optional email + password login
+(`AUTH_REQUIRED`, off locally, on in production; README → Authentication). **Phase 1 is complete.** Phase 2 (live
 flight lookups) has a provider seam but no real provider yet. See README → Roadmap.
 
 TypeScript npm-workspaces monorepo:
@@ -16,7 +17,7 @@ TypeScript npm-workspaces monorepo:
 | Path                            | Role                                                                                                                                                         |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `packages/shared`               | Zod schemas, API response types, pure helpers (distance, great circle, normalization, time). Consumed as **TS source**, with no build step.                  |
-| `apps/api`                      | Express 4 + Prisma 6 on Postgres 16, run with `tsx`. Layers: `routes → services/import → dal → prisma`.                                                      |
+| `apps/api`                      | Express 4 + Prisma 6 on Postgres 16, run with `tsx`. Layers: `routes → services/import/auth → dal → prisma`.                                                 |
 | `apps/web`                      | Vite 5 + React 18 + React Router 7 + TanStack Query 5 + Tailwind 3 + Recharts 2 + maplibre-gl 6.                                                             |
 | `docs/`                         | `data-model.md` (ERD, dedupe, derived values), `flight-data-api-analysis.md` (Phase 2 research).                                                             |
 | `docker/`, `docker-compose.yml` | Dev stack: `db`, `api` (migrate → seed-if-empty → `tsx watch`), `web` (Vite, proxies `/api`).                                                                |
@@ -42,8 +43,9 @@ tests use the separate `flightlog_test` database (`TEST_DATABASE_URL`), never th
 ## Invariants (don't break these)
 
 1. **User scoping.** Every query on `flights` / `import_batches` goes through `apps/api/src/dal/*` and
-   filters by `userId` (first argument). Routes read `req.userId`, set only by
-   `http/resolveUser.ts`. Never query user-owned tables from a route or service directly.
+   filters by `userId` (first argument). Routes read `req.userId`, **set only by
+   `http/resolveUser.ts`** (nothing else may assign it; with `AUTH_REQUIRED` on it never falls back
+   to the default user). Never query user-owned tables from a route or service directly.
 2. **Privacy.** PNR and seat never appear in list responses (`FlightListItem`), search (`q`), stats,
    logs or error messages. They are only in `FlightDetail` / the edit form. Don't log request bodies.
 3. **Times.** Store UTC `timestamptz`. Naive local inputs are converted with the airport's IANA zone
@@ -73,6 +75,14 @@ tests use the separate `flightlog_test` database (`TEST_DATABASE_URL`), never th
     permissively licensed dependencies or code (MIT, ISC, BSD, Apache-2.0, CC0, …). No GPL/AGPL/LGPL
     or other copyleft: their terms conflict with the noncommercial restriction. Ask before adding
     anything else. New workspaces get the same `"license"` field.
+
+12. **Auth secrets stay secret.** Passwords, password hashes, session tokens and cookies never appear in
+    logs, error messages, error `details` or any response body, and neither does the submitted login
+    email. Response types (`AuthMe` etc.) have no credential fields. Session tokens are stored only as a
+    SHA-256 hash. New auth code follows the same rule as invariant 2: don't log bodies.
+13. **Only `http/resolveUser.ts` sets `req.userId`.** With `AUTH_REQUIRED` on it takes the user from a
+    valid session and answers 401 otherwise; it never falls back to `DEFAULT_USER_ID`. Public routes
+    (`/api/health`, `POST /api/auth/login`, `/logout`) are the only exceptions and are listed there.
 
 ## Gotchas
 
