@@ -114,6 +114,49 @@ const validation = error(
 );
 const notFoundResponse = error('Not found (`not_found`)');
 
+const unauthenticated = error(
+  'No valid session cookie (`unauthenticated`). Only when the server runs with `AUTH_REQUIRED=true`.',
+);
+const csrfRejected = error(
+  'Cross-origin write rejected (`csrf_rejected`): `Origin` must match this server, or `Sec-Fetch-Site` must be same-origin/none',
+);
+const tooManyAttempts = {
+  description: 'Too many attempts (`too_many_attempts`); wait `Retry-After` seconds',
+  headers: {
+    'Retry-After': { description: 'Seconds until another attempt is allowed', schema: int },
+  },
+  content: json(ref('ApiError')),
+};
+const noStore = {
+  'Cache-Control': { description: 'Always `no-store`', schema: str },
+};
+const sessionCookieHeader = {
+  'Set-Cookie': {
+    description:
+      '`flightlog_session=<token>; HttpOnly; SameSite=Lax; Path=/; Max-Age=<ttl>` (plus `Secure` in production)',
+    schema: str,
+  },
+};
+
+type Operation = { security?: unknown[]; responses: Record<string, unknown> } & Record<
+  string,
+  unknown
+>;
+
+/** Every operation except the public ones (`security: []`) can answer 401, and writes can answer 403. */
+function addAuthResponses<T extends Record<string, Record<string, unknown>>>(paths: T): T {
+  for (const item of Object.values(paths)) {
+    for (const [method, op] of Object.entries(item)) {
+      if (!['get', 'post', 'put', 'patch', 'delete'].includes(method)) continue;
+      const operation = op as Operation;
+      if (operation.security?.length === 0 && method === 'get') continue;
+      if (operation.security?.length !== 0) operation.responses['401'] ??= unauthenticated;
+      if (method !== 'get') operation.responses['403'] ??= csrfRejected;
+    }
+  }
+  return paths;
+}
+
 export const openApiSpec = {
   openapi: '3.0.3',
   info: {
@@ -122,7 +165,10 @@ export const openApiSpec = {
     description: [
       'Personal flight log: import Flighty CSVs or add flights by hand, then view a map and stats.',
       '',
-      '- All `/api/*` requests act as the seeded default user (no auth in Phase 1).',
+      '- Authentication: with `AUTH_REQUIRED=true` every route except `GET /api/health` and `POST /api/auth/login`',
+      '  needs the `flightlog_session` cookie from `POST /api/auth/login` (401 `unauthenticated` otherwise), and',
+      '  writes must come from the same origin (403 `csrf_rejected`). With it off (local dev) every request acts as',
+      '  the seeded default user and `GET /api/auth/me` reports `authRequired: false`.',
       '- Errors use `{ "error": { "code", "message", "details?" } }`. The one deliberate exception is',
       '  `POST /api/lookup`, which returns 501 `{ configured: false, provider: null, error }` when no provider is set.',
       '- PNR and seat are only returned by the flight **detail** endpoints, never by lists, search or stats.',
@@ -130,19 +176,22 @@ export const openApiSpec = {
     ].join('\n'),
   },
   servers: [{ url: '/', description: 'This server' }],
+  security: [{ sessionCookie: [] }],
   tags: [
     { name: 'System' },
+    { name: 'Auth' },
     { name: 'Flights' },
     { name: 'Import' },
     { name: 'Insights' },
     { name: 'Reference' },
     { name: 'Lookup' },
   ],
-  paths: {
+  paths: addAuthResponses({
     '/api/health': {
       get: {
         tags: ['System'],
         summary: 'Liveness and database check',
+        security: [],
         responses: { '200': ok('Healthy', obj({ status: { type: 'string', enum: ['ok'] } })) },
       },
     },
@@ -151,6 +200,71 @@ export const openApiSpec = {
         tags: ['System'],
         summary: 'Client configuration',
         responses: { '200': ok('Config', ref('AppConfig')) },
+      },
+    },
+    '/api/auth/login': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Sign in with email and password',
+        description:
+          'Public. Sets the `flightlog_session` cookie. Unknown email, wrong password and an account without a password all return the same 401. Throttled per IP and per email.',
+        security: [],
+        requestBody: { required: true, content: json(ref('LoginInput')) },
+        responses: {
+          '200': {
+            description: 'Signed in',
+            headers: { ...sessionCookieHeader, ...noStore },
+            content: json(ref('AuthMe')),
+          },
+          '400': validation,
+          '401': error('Incorrect email or password (`invalid_credentials`)'),
+          '403': csrfRejected,
+          '429': tooManyAttempts,
+        },
+      },
+    },
+    '/api/auth/logout': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Sign out',
+        description:
+          'Deletes the session and clears the cookie. Idempotent: works (204) without a session.',
+        security: [],
+        responses: {
+          '204': { description: 'Signed out', headers: { ...noStore } },
+          '403': csrfRejected,
+        },
+      },
+    },
+    '/api/auth/me': {
+      get: {
+        tags: ['Auth'],
+        summary: 'The signed-in user',
+        description:
+          'With `AUTH_REQUIRED` off, returns the default user with `authRequired: false` (the web app then shows no login UI).',
+        responses: {
+          '200': {
+            description: 'Current user',
+            headers: { ...noStore },
+            content: json(ref('AuthMe')),
+          },
+        },
+      },
+    },
+    '/api/auth/password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Change password',
+        description:
+          'Verifies the current password, applies the policy (12 to 128 characters, not equal to the email), stores the new hash and signs out every OTHER session. Wrong current password is a 400 (`invalid_current_password`), not a 401.',
+        requestBody: { required: true, content: json(ref('ChangePasswordInput')) },
+        responses: {
+          '204': { description: 'Changed', headers: { ...noStore } },
+          '400': error(
+            'Validation failed, or the current password is wrong (`invalid_current_password`)',
+          ),
+          '429': tooManyAttempts,
+        },
       },
     },
     '/api/flights': {
@@ -378,8 +492,17 @@ export const openApiSpec = {
         },
       },
     },
-  },
+  }),
   components: {
+    securitySchemes: {
+      sessionCookie: {
+        type: 'apiKey',
+        in: 'cookie',
+        name: 'flightlog_session',
+        description:
+          'Random session token set by `POST /api/auth/login` (HttpOnly, SameSite=Lax). Browsers send it automatically.',
+      },
+    },
     schemas: {
       ApiError: obj(
         {
@@ -387,6 +510,18 @@ export const openApiSpec = {
         },
         ['error'],
       ),
+      LoginInput: obj({
+        email: { type: 'string', maxLength: 254, example: 'traveler@example.com' },
+        password: { type: 'string', maxLength: 1024, format: 'password' },
+      }),
+      ChangePasswordInput: obj({
+        currentPassword: { type: 'string', maxLength: 1024, format: 'password' },
+        newPassword: { type: 'string', minLength: 12, maxLength: 128, format: 'password' },
+      }),
+      AuthMe: obj({
+        user: obj({ id: { type: 'string', format: 'uuid' }, email: nstr, displayName: str }),
+        authRequired: bool,
+      }),
       AppConfig: obj({
         mapStyleUrl: str,
         lookup: obj({ configured: bool, provider: nstr }),

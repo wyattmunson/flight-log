@@ -3,12 +3,14 @@ import type { AppConfig } from '@flight-log/shared';
 import { prisma } from './db';
 import { env } from './env';
 import { docsRouter } from './docs/router';
+import { csrfGuard } from './http/csrf';
 import { errorHandler, notFoundHandler } from './http/errors';
 import { requestLog } from './http/requestLog';
 import { resolveUser } from './http/resolveUser';
 import { route } from './http/route';
 import { createLookupProvider } from './lookup/registry';
 import type { FlightLookupProvider } from './lookup/types';
+import { authRouter } from './routes/auth';
 import { flightsRouter } from './routes/flights';
 import { importRouter } from './routes/import';
 import { insightsRouter } from './routes/insights';
@@ -19,7 +21,10 @@ export function createApp(options: { lookupProvider?: FlightLookupProvider } = {
   const lookupProvider = options.lookupProvider ?? createLookupProvider();
   const app = express();
   app.disable('x-powered-by');
+  // Behind Traefik, req.ip and req.protocol come from X-Forwarded-*. 0 hops = trust nothing.
+  app.set('trust proxy', env.trustProxyHops);
   app.use(requestLog);
+  app.use('/api', csrfGuard);
   app.use(express.json({ limit: '1mb' }));
 
   app.get(
@@ -45,6 +50,7 @@ export function createApp(options: { lookupProvider?: FlightLookupProvider } = {
     res.json(config);
   });
 
+  app.use('/api/auth', authRouter());
   app.use('/api/flights', flightsRouter);
   app.use('/api/import', importRouter);
   app.use('/api/lookup', lookupRouter(lookupProvider));

@@ -1,6 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto';
+import type { Request, Response } from 'express';
 import * as dal from '../dal/auth';
 import { env } from '../env';
+import {
+  SESSION_COOKIE,
+  parseCookies,
+  serializeClearedSessionCookie,
+  serializeSessionCookie,
+} from './cookies';
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -58,3 +65,14 @@ export const deleteAllSessions = (userId: string, exceptSessionId?: string) =>
   dal.deleteSessionsForUser(userId, exceptSessionId);
 
 export const purgeExpired = (now = new Date()) => dal.purgeExpiredSessions(now);
+
+export const sessionTokenFrom = (req: Request) => parseCookies(req.headers.cookie)[SESSION_COOKIE];
+
+export const setSessionCookie = (res: Response, token: string) =>
+  res.append(
+    'Set-Cookie',
+    serializeSessionCookie(token, { secure: env.cookieSecure, maxAgeSeconds: ttlSeconds() }),
+  );
+
+export const clearSessionCookie = (res: Response) =>
+  res.append('Set-Cookie', serializeClearedSessionCookie(env.cookieSecure));
