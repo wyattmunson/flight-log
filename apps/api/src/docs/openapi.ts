@@ -250,6 +250,21 @@ export const openApiSpec = {
           },
         },
       },
+      patch: {
+        tags: ['Auth'],
+        summary: "Update the signed-in user's display name",
+        description:
+          'Updates only the current user. The name is trimmed and must be 1 to 80 characters; unknown fields are rejected. Works with `AUTH_REQUIRED` off too (acts on the default user).',
+        requestBody: { required: true, content: json(ref('UpdateProfileInput')) },
+        responses: {
+          '200': {
+            description: 'Updated user',
+            headers: { ...noStore },
+            content: json(ref('AuthMe')),
+          },
+          '400': error('Validation failed'),
+        },
+      },
     },
     '/api/auth/password': {
       post: {
@@ -514,6 +529,7 @@ export const openApiSpec = {
         email: { type: 'string', maxLength: 254, example: 'traveler@example.com' },
         password: { type: 'string', maxLength: 1024, format: 'password' },
       }),
+      UpdateProfileInput: obj({ displayName: { type: 'string', minLength: 1, maxLength: 80 } }),
       ChangePasswordInput: obj({
         currentPassword: { type: 'string', maxLength: 1024, format: 'password' },
         newPassword: { type: 'string', minLength: 12, maxLength: 128, format: 'password' },

@@ -17,7 +17,7 @@ src/components/        Layout (nav + attribution footer), FilterBar, Combobox (A
                        Drawer (dialog), States (Spinner/ErrorState/EmptyState/NoFlightsYet),
                        FlightDetail, FlightMap, SortableTable, charts (ChartCard/HBarChart/ColumnChart/TimeLine)
 src/pages/             MapPage, FlightsPage (+ drawer via ?flight=<id>), FlightFormPage (new + :id/edit),
-                       ImportPage, StatsPage
+                       ImportPage, StatsPage, ProfilePage (name + password sections), LoginPage
 test/                  Vitest + React Testing Library (jsdom)
 ```
 
@@ -41,7 +41,7 @@ test/                  Vitest + React Testing Library (jsdom)
 
 ## Auth
 
-- `useMe` / `useLogin` / `useLogout` / `useChangePassword` are in `hooks.ts`. Login and logout clear the whole
+- `useMe` / `useLogin` / `useLogout` / `useUpdateProfile` / `useChangePassword` are in `hooks.ts`. Login and logout clear the whole
   query cache. `RequireAuth` shows the Spinner while `/auth/me` loads, sends a 401 to `/login?next=…`, and
   renders the app with no login UI when `authRequired` is false.
 - Decide "signed in" from `me.status === 'success'`, never `me.data`: after a failed re-check TanStack Query

@@ -67,6 +67,8 @@ convert with `Number()`(see the`num()` helpers).
   tokens or cookies, and don't put the submitted email in an error. Session/user DB access is `dal/auth.ts`.
 - Cookie-authenticated tests send `Sec-Fetch-Site: same-origin` (or a matching `Origin`), or the CSRF
   guard answers 403. The login throttle lives in `authRouter()`, so each `createApp()` starts fresh.
+- `PATCH /api/auth/me` changes only `displayName`, for `req.userId` (the schema is `.strict()`, so email or
+  password fields are rejected). It also works with auth off, acting on the default user.
 - Wrong _current_ password on `/api/auth/password` is a 400 on purpose: the web app treats every 401 as
   "session lost".
 

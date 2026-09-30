@@ -1,13 +1,13 @@
 import { lazy, Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 import { EmptyState, Spinner } from './components/States';
-import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { FlightFormPage } from './pages/FlightFormPage';
 import { FlightsPage } from './pages/FlightsPage';
 import { ImportPage } from './pages/ImportPage';
 import { LoginPage } from './pages/LoginPage';
+import { ProfilePage } from './pages/ProfilePage';
 
 // MapLibre and Recharts are the heaviest dependencies; load them only on their pages.
 const MapPage = lazy(() => import('./pages/MapPage').then((m) => ({ default: m.MapPage })));
@@ -39,7 +39,10 @@ export function App() {
             }
           />
           <Route path="import" element={<ImportPage />} />
-          <Route path="account/password" element={<ChangePasswordPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          {/* Old links to the change-password page. */}
+          <Route path="change-password" element={<Navigate to="/profile" replace />} />
+          <Route path="account/password" element={<Navigate to="/profile" replace />} />
           <Route path="*" element={<EmptyState title="Page not found" />} />
         </Route>
       </Route>

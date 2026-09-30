@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import type { AuthMe } from '@flight-log/shared';
-import { ChangePasswordInputSchema, LoginInputSchema } from '@flight-log/shared';
+import {
+  ChangePasswordInputSchema,
+  LoginInputSchema,
+  UpdateProfileInputSchema,
+} from '@flight-log/shared';
 import {
   checkPasswordPolicy,
   hashPassword,
@@ -85,6 +89,17 @@ export function authRouter() {
       const user = await findUserById(req.userId);
       if (!user) throw new AppError(401, 'unauthenticated', 'Sign in required');
       res.json(toAuthMe(user));
+    }),
+  );
+
+  router.patch(
+    '/me',
+    route(async (req, res) => {
+      const { displayName } = UpdateProfileInputSchema.parse(req.body);
+      // Scoped by req.userId only; a missing row (deleted user) is a lost session.
+      if (!(await findUserById(req.userId)))
+        throw new AppError(401, 'unauthenticated', 'Sign in required');
+      res.json(toAuthMe(await updateUser(req.userId, { displayName })));
     }),
   );
 

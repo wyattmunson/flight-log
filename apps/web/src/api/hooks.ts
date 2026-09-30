@@ -5,6 +5,7 @@ import type {
   AppConfig,
   AuthMe,
   ChangePasswordInput,
+  UpdateProfileInput,
   FilterOptions,
   FlightDetail,
   FlightFilters,
@@ -51,6 +52,19 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => apiFetch<void>('/auth/logout', { method: 'POST' }),
     onSettled: () => queryClient.clear(),
+  });
+}
+
+/** Renames the signed-in user. Writes the returned AuthMe into the cache so the user menu updates. */
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateProfileInput) =>
+      apiFetch<AuthMe>('/auth/me', { method: 'PATCH', json: input }),
+    onSuccess: (me) => {
+      queryClient.setQueryData(ME_KEY, me);
+      return queryClient.invalidateQueries({ queryKey: ME_KEY });
+    },
   });
 }
 

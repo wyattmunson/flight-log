@@ -149,3 +149,11 @@ export const ChangePasswordInputSchema = z.object({
   newPassword: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
 });
 export type ChangePasswordInput = z.infer<typeof ChangePasswordInputSchema>;
+
+export const DISPLAY_NAME_MAX_LENGTH = 80;
+
+/** `PATCH /api/auth/me`. Only the name is editable; email and password have their own paths. */
+export const UpdateProfileInputSchema = z
+  .object({ displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX_LENGTH) })
+  .strict();
+export type UpdateProfileInput = z.infer<typeof UpdateProfileInputSchema>;

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_USER_ID } from '@flight-log/shared';
 import { createApp } from '../../src/app';
 import { hashPassword } from '../../src/auth/password';
@@ -299,6 +299,94 @@ describe('POST /api/auth/password', () => {
     expect(sameAsEmail.status).toBe(400); // "alice@example.com" is 17 chars: passes length, fails policy
     expect(sameAsEmail.body.error.details[0].message).toMatch(/email/);
     await c.get('/api/auth/me').expect(200);
+  });
+});
+
+describe('PATCH /api/auth/me', () => {
+  afterEach(async () => {
+    await prisma.user.updateMany({
+      where: { id: { in: [ALICE.id, BOB.id] } },
+      data: { displayName: 'Test Traveler' },
+    });
+  });
+
+  it('updates only the current user, trims, and returns AuthMe', async () => {
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: BOB.id } });
+    const c = client();
+    await login(c).expect(200);
+    const res = await c.patch('/api/auth/me').send({ displayName: '  Alice A.  ' }).expect(200);
+    expect(res.body).toEqual({
+      user: { id: ALICE.id, email: ALICE.email, displayName: 'Alice A.' },
+      authRequired: true,
+    });
+    expect(JSON.stringify(res.body)).not.toMatch(/scrypt|password|hash/i);
+    expect(res.headers['cache-control']).toBe('no-store');
+    const me = await c.get('/api/auth/me').expect(200);
+    expect(me.body.user.displayName).toBe('Alice A.');
+    const bob = await prisma.user.findUniqueOrThrow({ where: { id: BOB.id } });
+    expect(bob).toEqual(before);
+  });
+
+  it('ignores nothing: rejects extra fields so email/password cannot be smuggled in', async () => {
+    const c = client();
+    await login(c).expect(200);
+    await c
+      .patch('/api/auth/me')
+      .send({ displayName: 'Ok', email: 'evil@example.com' })
+      .expect(400);
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: ALICE.id } });
+    expect(row.email).toBe(ALICE.email);
+    expect(row.displayName).toBe('Test Traveler');
+  });
+
+  it.each([
+    ['empty', ''],
+    ['whitespace only', '   '],
+    ['too long', 'x'.repeat(81)],
+    ['not a string', 42],
+  ])(
+    'rejects a name that is %s with a validation_error on displayName',
+    async (_l, displayName) => {
+      const c = client();
+      await login(c).expect(200);
+      const res = await c.patch('/api/auth/me').send({ displayName }).expect(400);
+      expect(res.body.error.code).toBe('validation_error');
+      expect(res.body.error.details).toEqual([expect.objectContaining({ path: 'displayName' })]);
+      expect(JSON.stringify(res.body)).not.toContain('xxxxxxxx');
+      const row = await prisma.user.findUniqueOrThrow({ where: { id: ALICE.id } });
+      expect(row.displayName).toBe('Test Traveler');
+    },
+  );
+
+  it('accepts exactly 80 characters', async () => {
+    const c = client();
+    await login(c).expect(200);
+    const name = 'y'.repeat(80);
+    const res = await c.patch('/api/auth/me').send({ displayName: name }).expect(200);
+    expect(res.body.user.displayName).toBe(name);
+  });
+
+  it('answers 401 without a session when AUTH_REQUIRED is on, and changes nothing', async () => {
+    const res = await client().patch('/api/auth/me').send({ displayName: 'Nope' }).expect(401);
+    expect(res.body).toEqual({
+      error: { code: 'unauthenticated', message: 'Sign in required' },
+    });
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: ALICE.id } });
+    expect(row.displayName).toBe('Test Traveler');
+  });
+
+  it('acts on the default user when AUTH_REQUIRED is off', async () => {
+    process.env.AUTH_REQUIRED = 'false';
+    try {
+      const res = await request(createApp())
+        .patch('/api/auth/me')
+        .send({ displayName: 'Local Me' })
+        .expect(200);
+      expect(res.body.authRequired).toBe(false);
+      expect(res.body.user).toMatchObject({ id: DEFAULT_USER_ID, displayName: 'Local Me' });
+    } finally {
+      process.env.AUTH_REQUIRED = 'true';
+    }
   });
 });
 

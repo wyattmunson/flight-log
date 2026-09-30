@@ -115,18 +115,18 @@ Why it's shaped this way is in [Design decisions](#design-decisions).
 
 **Web (`apps/web/src`)**
 
-| Piece                                                                         | Responsibility                                                                                                    |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `pages/MapPage` + `components/FlightMap`                                      | MapLibre map: frequency-weighted arcs, sized airport markers, popups, route list and route flights panel          |
-| `pages/FlightsPage` + `components/FlightDetail`, `Drawer`                     | Sortable, filterable, paginated table; detail drawer (`?flight=<id>`) with local times; delete                    |
-| `pages/FlightFormPage` + `components/Combobox`                                | Add/edit form with airport/airline typeahead, live distance, local-time inputs, **Look up flight**                |
-| `pages/ImportPage`                                                            | Drag-and-drop upload, preview (counts, sample, errors), commit summary, import history + undo                     |
-| `pages/StatsPage` + `components/charts`, `SortableTable`                      | Headline cards, records, punctuality, Recharts charts with table views, mi/km toggle                              |
-| `components/FilterBar`, `lib/useFilters`                                      | Year range, airline and cabin filters stored in the URL, shared by map, list and stats                            |
-| `components/Layout`, `States`                                                 | Nav, attribution footer; spinner, error (with retry) and empty states                                             |
-| `pages/LoginPage`, `ChangePasswordPage`, `components/RequireAuth`, `UserMenu` | Sign in (returns to the page you asked for), route guard, user menu, change password (all inert when auth is off) |
-| `api/client`, `api/hooks`                                                     | `fetch` wrapper with typed errors; every TanStack Query hook plus cache invalidation                              |
-| `lib/format`, `lib/useChartTheme`                                             | Display formatting (dates, distances, local times, country names); chart colors from CSS tokens                   |
+| Piece                                                                  | Responsibility                                                                                                                                                       |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pages/MapPage` + `components/FlightMap`                               | MapLibre map: frequency-weighted arcs, sized airport markers, popups, route list and route flights panel                                                             |
+| `pages/FlightsPage` + `components/FlightDetail`, `Drawer`              | Sortable, filterable, paginated table; detail drawer (`?flight=<id>`) with local times; delete                                                                       |
+| `pages/FlightFormPage` + `components/Combobox`                         | Add/edit form with airport/airline typeahead, live distance, local-time inputs, **Look up flight**                                                                   |
+| `pages/ImportPage`                                                     | Drag-and-drop upload, preview (counts, sample, errors), commit summary, import history + undo                                                                        |
+| `pages/StatsPage` + `components/charts`, `SortableTable`               | Headline cards, records, punctuality, Recharts charts with table views, mi/km toggle                                                                                 |
+| `components/FilterBar`, `lib/useFilters`                               | Year range, airline and cabin filters stored in the URL, shared by map, list and stats                                                                               |
+| `components/Layout`, `States`                                          | Nav, attribution footer; spinner, error (with retry) and empty states                                                                                                |
+| `pages/LoginPage`, `ProfilePage`, `components/RequireAuth`, `UserMenu` | Sign in (returns to the page you asked for), route guard, user menu, profile (name + change password; login UI and the password section are hidden when auth is off) |
+| `api/client`, `api/hooks`                                              | `fetch` wrapper with typed errors; every TanStack Query hook plus cache invalidation                                                                                 |
+| `lib/format`, `lib/useChartTheme`                                      | Display formatting (dates, distances, local times, country names); chart colors from CSS tokens                                                                      |
 
 **Shared (`packages/shared/src`)**: `schemas.ts` (Zod inputs), `types.ts` (API responses), `distance.ts`,
 `geo.ts` (great circle with unwrapped longitudes), `normalize.ts`, `time.ts` (Luxon parsing/formatting), `constants.ts`.
@@ -164,7 +164,8 @@ sequenceDiagram
 | ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET              | `/api/health`                                        | DB ping                                                                                                                                     |
 | POST             | `/api/auth/login`, `/logout`                         | `{ email, password }` sets the session cookie; logout clears it (204, works without a session)                                              |
-| GET / POST       | `/api/auth/me`, `/api/auth/password`                 | current user + `authRequired`; `{ currentPassword, newPassword }` signs out your other sessions                                             |
+| GET / PATCH      | `/api/auth/me`                                       | current user + `authRequired`; PATCH `{ displayName }` renames the current user (trimmed, 1 to 80 characters)                               |
+| POST             | `/api/auth/password`                                 | `{ currentPassword, newPassword }` signs out your other sessions                                                                            |
 | GET              | `/api/config`                                        | Map style URL, lookup status, API docs URL                                                                                                  |
 | GET              | `/api/docs`, `/api/openapi.json`                     | Swagger UI and the raw OpenAPI spec (`ENABLE_API_DOCS`, on by default)                                                                      |
 | GET              | `/api/flights`                                       | `page, pageSize, sort (date, -date, distance, route, airline, flightNumber, aircraft, duration), year, yearFrom, yearTo, airline, cabin, q` |
@@ -229,8 +230,12 @@ Traefik basic auth that used to guard the site is gone.
 - **`resolveUser`** stays the only place `req.userId` is set. With auth on it never falls back to the
   default user.
 - **Web.** `/login` returns you to the page you asked for (only same-origin relative paths are honored).
-  Any 401 sends you back to `/login`. A user menu offers Change password and Sign out. With auth off the
-  API reports `authRequired: false` and none of this is shown.
+  Any 401 sends you back to `/login`. A user menu offers Profile and Sign out. With auth off the
+  API reports `authRequired: false`, there is no login UI, and the header shows just a link to Profile.
+- **Profile.** `/profile` edits the display name (`PATCH /api/auth/me`, trimmed, 1 to 80 characters,
+  only the current user) and holds the change-password form (`POST /api/auth/password`, unchanged).
+  With auth off only the name section is shown, with a note that credentials are managed elsewhere.
+  `/change-password` and the old `/account/password` redirect to `/profile`.
 
 **Adding a user** (there is no signup page). From `apps/api`, against the database in `.env`:
 

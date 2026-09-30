@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLogout, useMe } from '../api/hooks';
 
-/** Display name with "Change password" and "Sign out". Renders nothing when auth is off. */
+/** Display name with "Profile" and "Sign out". Without auth, just a link to the profile. */
 export function UserMenu() {
   const me = useMe().data;
   const logout = useLogout();
@@ -26,7 +26,20 @@ export function UserMenu() {
     };
   }, [open]);
 
-  if (!me?.authRequired) return null;
+  if (!me) return null;
+  // Without login there is no menu (nothing to sign out of): a compact initial that links to the
+  // name form, so the header keeps its room on phones.
+  if (!me.authRequired)
+    return (
+      <Link
+        to="/profile"
+        aria-label={`Profile (${me.user.displayName})`}
+        title={me.user.displayName}
+        className="btn-secondary ml-auto h-9 w-9 shrink-0 justify-center !px-0"
+      >
+        <span aria-hidden>{[...me.user.displayName][0]?.toUpperCase() ?? '?'}</span>
+      </Link>
+    );
 
   const signOut = () => {
     setOpen(false);
@@ -57,8 +70,8 @@ export function UserMenu() {
               {me.user.email}
             </p>
           )}
-          <Link to="/account/password" className={item} onClick={() => setOpen(false)}>
-            Change password
+          <Link to="/profile" className={item} onClick={() => setOpen(false)}>
+            Profile
           </Link>
           <button type="button" className={item} onClick={signOut} disabled={logout.isPending}>
             Sign out
