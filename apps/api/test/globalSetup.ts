@@ -20,7 +20,7 @@ export default async function setup() {
   const prisma = new PrismaClient({ datasourceUrl: url });
   try {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE flights, import_batches, aircraft_types, flight_lookup_cache, users, airports, airlines RESTART IDENTITY CASCADE',
+      'TRUNCATE flights, import_batches, sessions, aircraft_types, flight_lookup_cache, users, airports, airlines RESTART IDENTITY CASCADE',
     );
     await prisma.airport.createMany({ data: TEST_AIRPORTS });
     await prisma.airline.createMany({ data: TEST_AIRLINES });

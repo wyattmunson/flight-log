@@ -7,6 +7,7 @@ SQL at the end of the init migration. Tables use snake_case; Prisma models use c
 erDiagram
   users ||--o{ flights : owns
   users ||--o{ import_batches : owns
+  users ||--o{ sessions : "logs in with"
   import_batches |o--o{ flights : "created (nullable)"
   airports ||--o{ flights : "origin"
   airports ||--o{ flights : "destination"
@@ -19,7 +20,16 @@ erDiagram
     uuid id PK
     text email UK "nullable"
     text display_name
+    text password_hash "nullable, scrypt$N$r$p$salt$hash"
     timestamptz created_at
+  }
+  sessions {
+    uuid id PK
+    uuid user_id FK "ON DELETE CASCADE"
+    text token_hash UK "SHA-256 hex of the cookie token"
+    timestamptz created_at
+    timestamptz last_seen_at
+    timestamptz expires_at "indexed"
   }
   airports {
     int id PK "OurAirports id"
@@ -133,7 +143,19 @@ erDiagram
 `flights` and `import_batches` carry `user_id`. All access goes through `apps/api/src/dal/*`, and
 every function there takes `userId` first and filters by it. Raw-SQL aggregates (stats, map) build
 their `WHERE` from `filtersSql(userId, …)`. `req.userId` is set by a single middleware
-(`apps/api/src/http/resolveUser.ts`), which returns the seeded default user in Phase 1.
+(`apps/api/src/http/resolveUser.ts`). With `AUTH_REQUIRED` off it is the seeded default user; with it
+on, the user of the session cookie (401 otherwise).
+
+## Authentication
+
+- `users.password_hash` is `scrypt$N$r$p$saltB64$hashB64` (Node `crypto.scrypt`), so the parameters
+  can be raised later without a migration. NULL means the user cannot log in (the seeded default
+  user starts that way; `npm run user:create -- --adopt-default …` gives it credentials, keeping its
+  flights). `email` is stored lower-cased and trimmed.
+- `sessions` holds one row per login. The browser cookie carries a random 32-byte token; only its
+  SHA-256 hex (`token_hash`) is stored, so a database leak does not yield usable cookies. Expiry is
+  sliding: `expires_at`/`last_seen_at` are pushed forward, at most once an hour, on use. Expired rows
+  are purged at that user's next login. Deleting a user deletes their sessions.
 
 Reference tables (`airports`, `airlines`, `aircraft_types`, `aircraft_families`, `flight_lookup_cache`) are global.
 

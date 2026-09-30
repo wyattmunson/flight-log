@@ -18,7 +18,7 @@ export function api(options: { lookupProvider?: FlightLookupProvider } = {}) {
 /** Remove all user-owned data between tests (reference data stays). */
 export async function resetUserData() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE flights, import_batches, aircraft_types, flight_lookup_cache RESTART IDENTITY CASCADE',
+    'TRUNCATE flights, import_batches, sessions, aircraft_types, flight_lookup_cache RESTART IDENTITY CASCADE',
   );
   await prisma.airport.updateMany({ data: { flightyId: null } });
   await prisma.airline.updateMany({ data: { flightyId: null } });
