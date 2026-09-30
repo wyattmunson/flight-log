@@ -15,6 +15,7 @@ Licensed for **noncommercial use only**. See [License](#license).
 | This README                                                            | People        | Setup, architecture, components, design decisions, assumptions, how to extend, roadmap                 |
 | [`docs/data-model.md`](docs/data-model.md)                             | Both          | ERD, dedupe rules, derived values, normalization                                                       |
 | [`docs/flight-data-api-analysis.md`](docs/flight-data-api-analysis.md) | Both          | Phase 2 provider research and recommendation                                                           |
+| [`docs/release-notes/`](docs/release-notes/)                           | Both          | Dated notes: what shipped, setup commands, pitfalls and workarounds                                    |
 | [`AGENTS.md`](AGENTS.md) (+ one per workspace)                         | Coding agents | Terse rules, invariants, gotchas and change checklists. `CLAUDE.md` files import them for Claude Code. |
 
 The rationale lives here. The agent files state the resulting rules and link back, so update both
@@ -83,7 +84,7 @@ apps/api          Express + Prisma (run with tsx)
   test/           unit + supertest integration tests, synthetic Flighty fixture
 apps/web          Vite + React 18 + React Router + TanStack Query + Tailwind + Recharts + MapLibre
 packages/shared   Zod schemas, API types, haversine, great-circle points, normalization, Luxon time helpers
-docs/             data-model.md (ERD), flight-data-api-analysis.md
+docs/             data-model.md (ERD), flight-data-api-analysis.md, release-notes/
 docker/           dev image, api entrypoint (migrate → seed-if-empty → dev), test-DB init
 deploy/           production deploy (Lightsail + k3s + CloudNativePG): Dockerfiles, k8s manifests, scripts
 ```
