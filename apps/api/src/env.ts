@@ -38,7 +38,7 @@ export const env = {
     return !['false', '0'].includes(process.env.ENABLE_API_DOCS?.trim().toLowerCase() ?? '');
   },
   get mapStyleUrl() {
-    return process.env.MAP_STYLE_URL || 'https://tiles.openfreemap.org/styles/liberty';
+    return process.env.MAP_STYLE_URL || 'https://tiles.openfreemap.org/styles/fiord';
   },
   get flightApiProvider() {
     return process.env.FLIGHT_API_PROVIDER?.trim().toLowerCase() || null;

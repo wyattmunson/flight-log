@@ -14,7 +14,7 @@ configMapGenerator:
       - API_PORT=3000
       - MAX_UPLOAD_MB=10
       - IMPORT_PREVIEW_TTL_MINUTES=30
-      - MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty
+      - MAP_STYLE_URL=https://tiles.openfreemap.org/styles/fiord
       # Swagger UI is off on the public host; set to "true" to enable it (it still needs a login).
       - ENABLE_API_DOCS=false
       # Email + password login with database sessions. Create the first user BEFORE applying this
