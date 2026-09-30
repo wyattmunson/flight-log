@@ -16,6 +16,7 @@ import { importRouter } from './routes/import';
 import { insightsRouter } from './routes/insights';
 import { lookupRouter } from './routes/lookup';
 import { referenceRouter } from './routes/reference';
+import { appVersion } from './version';
 
 export function createApp(options: { lookupProvider?: FlightLookupProvider } = {}) {
   const lookupProvider = options.lookupProvider ?? createLookupProvider();
@@ -31,7 +32,7 @@ export function createApp(options: { lookupProvider?: FlightLookupProvider } = {
     '/api/health',
     route(async (_req, res) => {
       await prisma.$queryRaw`SELECT 1`;
-      res.json({ status: 'ok' });
+      res.json({ status: 'ok', version: appVersion });
     }),
   );
 

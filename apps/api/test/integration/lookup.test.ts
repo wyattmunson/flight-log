@@ -73,7 +73,10 @@ describe('POST /api/lookup', () => {
 
 describe('GET /api/health and search', () => {
   it('reports health', async () => {
-    expect((await api().get('/api/health')).body).toEqual({ status: 'ok' });
+    expect((await api().get('/api/health')).body).toEqual({
+      status: 'ok',
+      version: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+    });
   });
 
   it('searches airports (preferring large airports on shared codes) and airlines', async () => {

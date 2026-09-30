@@ -108,6 +108,9 @@ export function Layout() {
               </a>
             </>
           )}
+          <span className="float-right" title="App version">
+            v{__APP_VERSION__}
+          </span>
         </div>
       </footer>
     </div>

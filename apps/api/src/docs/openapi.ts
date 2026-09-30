@@ -3,6 +3,8 @@
  * Keep it in step with `src/routes/*` and the shared types in `packages/shared`
  * (`test/integration/docs.test.ts` fails if a mounted route is missing here).
  */
+import { appVersion } from '../version';
+
 type Schema = Record<string, unknown>;
 
 const nullable = (schema: Schema): Schema => ({ ...schema, nullable: true });
@@ -161,7 +163,7 @@ export const openApiSpec = {
   openapi: '3.0.3',
   info: {
     title: 'Flight Log API',
-    version: '0.1.0',
+    version: appVersion,
     description: [
       'Personal flight log: import Flighty CSVs or add flights by hand, then view a map and stats.',
       '',
@@ -192,7 +194,15 @@ export const openApiSpec = {
         tags: ['System'],
         summary: 'Liveness and database check',
         security: [],
-        responses: { '200': ok('Healthy', obj({ status: { type: 'string', enum: ['ok'] } })) },
+        responses: {
+          '200': ok(
+            'Healthy',
+            obj({
+              status: { type: 'string', enum: ['ok'] },
+              version: { type: 'string', example: '1.0.0' },
+            }),
+          ),
+        },
       },
     },
     '/api/config': {

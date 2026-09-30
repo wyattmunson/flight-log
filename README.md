@@ -60,15 +60,16 @@ npm run dev                      # api on :3001, web on :5173
 
 ### Scripts
 
-| Command                                       | What it does                                                                              |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `npm test`                                    | All tests: shared unit, API unit + integration (needs the `db` container), web components |
-| `npm run lint` / `npm run typecheck`          | ESLint (flat config) / `tsc --noEmit` in every workspace                                  |
-| `npm run format` / `format:check`             | Prettier                                                                                  |
-| `npm run seed:reference`                      | Download (or read from `data/`) and insert reference data                                 |
-| `npm run seed:aircraft-families`              | Create aircraft family rows and assign a family to each aircraft type that has none       |
-| `npm run user:create -w @flight-log/api -- …` | Create a login, or `--adopt-default` (see [Authentication](#authentication))              |
-| `docker compose exec -w /app api npm test`    | Run the suite inside Docker                                                               |
+| Command                                             | What it does                                                                                        |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `npm test`                                          | All tests: shared unit, API unit + integration (needs the `db` container), web components           |
+| `npm run lint` / `npm run typecheck`                | ESLint (flat config) / `tsc --noEmit` in every workspace                                            |
+| `npm run format` / `format:check`                   | Prettier                                                                                            |
+| `npm run release` / `release:dry` / `release:check` | Bump version from conventional commits, commit + tag (see [Releases](#releases)) / preview / verify |
+| `npm run seed:reference`                            | Download (or read from `data/`) and insert reference data                                           |
+| `npm run seed:aircraft-families`                    | Create aircraft family rows and assign a family to each aircraft type that has none                 |
+| `npm run user:create -w @flight-log/api -- …`       | Create a login, or `--adopt-default` (see [Authentication](#authentication))                        |
+| `docker compose exec -w /app api npm test`          | Run the suite inside Docker                                                                         |
 
 Set `FLIGHT_API_PROVIDER=stub` in `.env` to enable the demo **Look up flight** button (try `UA837` or `BA117`).
 
@@ -273,6 +274,30 @@ npm run user:set-password -w @flight-log/api -- --email you@example.com
 The password is prompted for twice without echo on a terminal; otherwise one line is read from stdin
 (`printf '%s\n' "$PW" | npm run user:create …`). It is never printed. In production see
 [`deploy/README.md`](deploy/README.md#enabling-login-on-an-existing-deployment-replaces-basic-auth).
+
+## Releases
+
+One version for the whole repo (api, web and shared ship together). The git tag `vX.Y.Z` is the source of
+truth; `scripts/release.mjs` keeps every `package.json`, `package-lock.json` and `CHANGELOG.md` in step with it.
+
+| Commit (Conventional Commits)                       | Bump              |
+| --------------------------------------------------- | ----------------- |
+| `feat!:`, `fix!:` or a `BREAKING CHANGE:` footer    | major             |
+| `feat:`                                             | minor             |
+| `fix:`, `perf:`                                     | patch             |
+| `docs`, `chore`, `test`, `refactor`, `ci`, `deploy` | none (no release) |
+
+The script looks at **all commits since the last `v*` tag** and applies the highest bump, so a `docs:` commit
+on top of a `feat:` still releases a minor. A breaking change on `0.x` goes to `1.0.0`.
+
+- **Locally:** `npm run release:dry` previews, `npm run release` commits `chore(release): vX.Y.Z` and tags it,
+  then `git push --follow-tags`. Running it again with nothing new is a no-op.
+- **CI:** `.github/workflows/images.yml` runs the same script on every push to `main`, pushes the release
+  commit and tag (`[skip ci]`), creates the GitHub Release from the changelog section, and builds the images
+  tagged `latest`, `sha-<commit>` and (on a release) `X.Y.Z`. `release-check.yml` shows the next version on PRs.
+- **Where the version appears:** `GET /api/health` and the OpenAPI `info.version` (from `apps/api/package.json`),
+  and the web footer (`__APP_VERSION__`, injected by Vite from `apps/web/package.json`).
+- **Baseline:** the first release needs an existing tag (`v0.1.0`). Push it once with `git push origin v0.1.0`.
 
 ## Extending the app
 

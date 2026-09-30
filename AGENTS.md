@@ -120,6 +120,13 @@ tests use the separate `flightlog_test` database (`TEST_DATABASE_URL`), never th
 | New lookup provider        | README → "Adding a flight-lookup provider"; `apps/api/src/lookup/`                                                                                                                                                                                                                                                                                                          |
 | Docs                       | Behavior or assumption changes → README "Assumptions". Architecture/rationale → README "Design decisions". Agent rules → the relevant `AGENTS.md`.                                                                                                                                                                                                                          |
 
+## Commits and releases
+
+Use Conventional Commits (`feat:`, `fix:`, `feat!:` / `BREAKING CHANGE:` footer; `docs`, `chore`, `test`, `refactor`,
+`ci`, `deploy` don't release). They drive the version: `scripts/release.mjs` bumps the single repo version on push to
+`main` (or `npm run release`). Never edit `version` fields or `CHANGELOG.md` by hand, and don't hardcode a version
+anywhere (use `apps/api/src/version.ts` / `__APP_VERSION__`). README → Releases.
+
 ## Definition of done
 
 - `npm run lint && npm run typecheck && npm test` all pass, and `npm run format:check` is clean.
