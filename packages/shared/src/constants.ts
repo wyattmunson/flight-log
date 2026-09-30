@@ -9,3 +9,6 @@ export const KM_PER_MILE = 1.609344;
 export const ON_TIME_THRESHOLD_MINUTES = 15;
 /** Seeded Phase 1 user. `resolveUser` returns this until real auth exists. */
 export const DEFAULT_USER_ID = '00000000-0000-4000-8000-000000000001';
+/** Password policy: length only, no composition rules. */
+export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MAX_LENGTH = 128;

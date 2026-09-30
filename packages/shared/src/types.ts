@@ -287,3 +287,10 @@ export interface AppConfig {
   apiDocsUrl: string | null;
   lookup: { configured: boolean; provider: string | null };
 }
+
+/** `GET /api/auth/me` and the `POST /api/auth/login` response. Never carries credentials. */
+export interface AuthMe {
+  user: { id: string; email: string | null; displayName: string };
+  /** False when the server runs without `AUTH_REQUIRED` (the web app then shows no login UI). */
+  authRequired: boolean;
+}

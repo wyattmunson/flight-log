@@ -11,6 +11,15 @@ const num = (value: string | undefined, fallback: number) => {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
+const bool = (value: string | undefined, fallback: boolean) => {
+  const v = value?.trim().toLowerCase();
+  if (v === 'true' || v === '1') return true;
+  if (v === 'false' || v === '0') return false;
+  return fallback;
+};
+
+const isProduction = () => process.env.NODE_ENV === 'production';
+
 export const env = {
   get port() {
     return num(process.env.API_PORT, 3000);
@@ -36,5 +45,22 @@ export const env = {
   },
   get lookupCacheTtlMs() {
     return num(process.env.LOOKUP_CACHE_TTL_HOURS, 720) * 3_600_000;
+  },
+  /** When on, every /api request except health and login needs a valid session cookie. */
+  get authRequired() {
+    return bool(process.env.AUTH_REQUIRED, false);
+  },
+  /** Adds `Secure` to the session cookie. Default on in production (HTTPS behind Traefik). */
+  get cookieSecure() {
+    return bool(process.env.COOKIE_SECURE, isProduction());
+  },
+  /** Reverse proxies to trust for req.ip / req.protocol (Express `trust proxy` hop count). */
+  get trustProxyHops() {
+    const n = Number(process.env.TRUST_PROXY_HOPS);
+    if (process.env.TRUST_PROXY_HOPS?.trim() && Number.isInteger(n) && n >= 0) return n;
+    return isProduction() ? 1 : 0;
+  },
+  get sessionTtlDays() {
+    return num(process.env.SESSION_TTL_DAYS, 30);
   },
 };
